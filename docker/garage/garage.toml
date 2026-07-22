@@ -1,0 +1,22 @@
+# Garage single-node สำหรับ dev — prod ต้องทบทวน replication และ backup (§8.5)
+# ⚠️ ต้อง verify กับเอกสารของ Garage เวอร์ชันที่ pin จริง:
+#    v1.x ใช้ `replication_factor`, v0.9 และก่อนหน้าใช้ `replication_mode`
+metadata_dir = "/var/lib/garage/meta"
+data_dir     = "/var/lib/garage/data"
+db_engine    = "sqlite"
+
+replication_factor = 1
+
+rpc_bind_addr   = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+# rpc_secret มาจากไฟล์ที่ mount เข้ามา — ห้าม hardcode (CLAUDE.md §5)
+rpc_secret_file = "/run/secrets/garage_rpc_secret"
+
+[s3_api]
+s3_region     = "garage"
+api_bind_addr = "[::]:3900"
+root_domain   = ".s3.garage"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token_file = "/run/secrets/garage_admin_token"

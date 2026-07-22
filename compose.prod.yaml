@@ -1,0 +1,149 @@
+# prod override — ใช้คู่กับ compose.yaml
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d
+#   (หรือ `make up-prod`)
+#
+# ต่างจาก dev:
+#   - ไม่ bind-mount source (โค้ดอบใน image)
+#   - ไม่มี mailpit / xdebug
+#   - read_only rootfs + cap_drop + no-new-privileges
+#   - secret ผ่าน Docker secrets (ไฟล์) ไม่ใช่ env — env อ่านได้จาก docker inspect
+#   - image pin ด้วย digest
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,mode=1777
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  logging:
+    driver: json-file
+    options: { max-size: "10m", max-file: "5" }
+  restart: always
+
+x-php-prod: &php-prod
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+    target: prod
+  image: ${REGISTRY:-local}/mvp-app:${APP_VERSION:?ตั้ง APP_VERSION — ห้ามใช้ latest}
+  volumes:
+    - appstorage:/var/www/html/storage
+  <<: *hardening
+
+services:
+
+  nginx:
+    build:
+      args:
+        NGINX_ENV: prod
+    volumes:
+      - ./.data/dist:/srv/dist:ro
+      - appstorage:/var/www/html/storage:ro
+    ports:
+      - "443:8443"
+    <<: *hardening
+
+  api:
+    <<: *php-prod
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_ROLE: api
+    secrets: [app_key, db_password, device_uuid_pepper]
+    # 🔴 ไม่มี document_kek / national_id_key / garage_* — เจตนา (ADR 0007)
+    #    ถ้าโค้ดฝั่ง API ต้องใช้ของพวกนี้ แปลว่าออกแบบผิด ให้ย้ายไป worker
+    networks: [edge-net, data-net]
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 1g }
+
+  portal:
+    <<: *php-prod
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_ROLE: portal
+    secrets:
+      [app_key, db_password, device_uuid_pepper,
+       document_kek, national_id_key, activation_jwt_key,
+       garage_access_key, garage_secret_key]
+    networks: [edge-net, data-net, garage-net]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512m }
+
+  worker:
+    <<: *php-prod
+    environment:
+      APP_ENV: production
+      APP_ROLE: worker
+    secrets:
+      [app_key, db_password, device_uuid_pepper,
+       document_kek, national_id_key,
+       garage_access_key, garage_secret_key]
+    networks: [data-net, garage-net]
+    deploy:
+      resources:
+        limits: { cpus: "1.0", memory: 512m }
+
+  scheduler:
+    <<: *php-prod
+    environment:
+      APP_ENV: production
+      APP_ROLE: scheduler
+    # ไม่มี document_kek — crypto-shredding แค่ลบ dek_wrapped ไม่ได้ถอดรหัส (§10.3)
+    secrets:
+      [app_key, db_password, device_uuid_pepper,
+       garage_access_key, garage_secret_key]
+    networks: [data-net, garage-net]
+    deploy:
+      resources:
+        limits: { cpus: "0.5", memory: 256m }
+
+  postgres:
+    environment:
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      POSTGRES_PASSWORD: ""
+    secrets: [db_password]
+    cap_drop: [ALL]
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    security_opt: [no-new-privileges:true]
+    restart: always
+    deploy:
+      resources:
+        limits: { cpus: "2.0", memory: 2g }
+
+  valkey:
+    <<: *hardening
+    tmpfs: []
+    volumes:
+      - valkeydata:/data
+
+  garage:
+    volumes:
+      - ./docker/garage/garage.prod.toml:/etc/garage.toml:ro
+      - garagemeta:/var/lib/garage/meta
+      - garagedata:/var/lib/garage/data
+    secrets: [garage_rpc_secret, garage_admin_token]
+    security_opt: [no-new-privileges:true]
+    restart: always
+
+  # dev เท่านั้น — ปิดใน prod
+  mailpit:
+    profiles: ["never"]
+
+secrets:
+  app_key:            { file: ./secrets/app_key }
+  db_password:        { file: ./secrets/db_password }
+  device_uuid_pepper: { file: ./secrets/device_uuid_pepper }
+  document_kek:       { file: ./secrets/document_kek }
+  national_id_key:    { file: ./secrets/national_id_key }
+  activation_jwt_key: { file: ./secrets/activation_jwt_key }
+  garage_access_key:  { file: ./secrets/garage_access_key }
+  garage_secret_key:  { file: ./secrets/garage_secret_key }
+  garage_rpc_secret:  { file: ./secrets/garage_rpc_secret }
+  garage_admin_token: { file: ./secrets/garage_admin_token }
+
+volumes:
+  appstorage:

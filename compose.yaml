@@ -1,0 +1,213 @@
+# dev — ใช้ `make up` ไม่ต้องเรียก docker compose ตรง (CLAUDE.md §5)
+#
+# 🔴 การแยก api / portal ไม่ใช่แค่เรื่องความสวยงาม (ADR 0007)
+#    `api` เปิดสู่อินเทอร์เน็ต จึง **ไม่ได้รับ DOCUMENT_KEK และไม่อยู่บน garage-net**
+#    ต่อให้ถูกเจาะและรันโค้ดได้ ก็ไม่มีทั้งกุญแจและเส้นทางไปถึงสำเนาบัตรประชาชน
+
+x-php-build: &php-build
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+    target: dev
+    args:
+      UID: ${UID:-1000}
+      GID: ${GID:-1000}
+
+x-php-env: &php-env
+  APP_ENV: local
+  APP_DEBUG: "true"
+  APP_KEY: ${APP_KEY:?ตั้งค่าใน .env ก่อน — รัน `make key`}
+  LOG_CHANNEL: stderr
+
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_PORT: 5432
+  DB_DATABASE: ${POSTGRES_DB:-mvp}
+  DB_USERNAME: ${POSTGRES_USER:-mvp}
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?required}
+
+  # Valkey — ext-redis ใช้ได้ตรงๆ โปรโตคอลเข้ากันได้ (CLAUDE.md §4)
+  REDIS_HOST: valkey
+  REDIS_PORT: 6379
+  CACHE_STORE: redis
+  QUEUE_CONNECTION: redis
+  SESSION_DRIVER: redis
+
+  DEVICE_UUID_PEPPER: ${DEVICE_UUID_PEPPER:?required}
+  MIN_SUPPORTED_APP_VERSION: ${MIN_SUPPORTED_APP_VERSION:-1}
+  APP_SIGNATURE_SHA256_ALLOWLIST: ${APP_SIGNATURE_SHA256_ALLOWLIST:-}
+
+  # MVP รัน attestation แบบ monitor mode — สลับเป็นบังคับด้วย flag นี้ (§4.2)
+  KEY_ATTESTATION_ENFORCE: ${KEY_ATTESTATION_ENFORCE:-false}
+
+# secret ที่ "แตะข้อมูลส่วนบุคคล" — ให้เฉพาะ portal / worker
+x-pii-env: &pii-env
+  DOCUMENT_KEK: ${DOCUMENT_KEK:?required}
+  DOCUMENT_KEK_VERSION: ${DOCUMENT_KEK_VERSION:-1}
+  NATIONAL_ID_ENCRYPTION_KEY: ${NATIONAL_ID_ENCRYPTION_KEY:?required}
+  ACTIVATION_JWT_PRIVATE_KEY: ${ACTIVATION_JWT_PRIVATE_KEY:-}
+
+x-garage-env: &garage-env
+  GARAGE_ENDPOINT: http://garage:3900
+  GARAGE_REGION: garage
+  GARAGE_BUCKET: driver-documents
+  GARAGE_USE_PATH_STYLE: "true"          # Garage ไม่รองรับ virtual-host style (§8.4)
+  GARAGE_ACCESS_KEY: ${GARAGE_ACCESS_KEY:-}
+  GARAGE_SECRET_KEY: ${GARAGE_SECRET_KEY:-}
+
+services:
+
+  # ── reverse proxy ────────────────────────────────────────────
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+      args:
+        NGINX_ENV: dev
+    ports:
+      - "${API_PORT:-8080}:8080"     # แอปคนขับ
+      - "${STAFF_PORT:-8081}:8081"   # เจ้าหน้าที่
+      - "${DL_PORT:-8082}:8082"      # manifest + APK
+    volumes:
+      - ./apps/api:/var/www/html:ro
+      - ./.data/dist:/srv/dist:ro
+    networks: [edge-net]
+    depends_on:
+      api: { condition: service_started }
+      portal: { condition: service_started }
+    restart: unless-stopped
+
+  # ── API สำหรับแอปคนขับ — ไม่มี KEK ไม่อยู่บน garage-net ──────
+  api:
+    <<: *php-build
+    environment:
+      <<: *php-env
+      APP_ROLE: api
+      APP_URL: http://localhost:${API_PORT:-8080}
+    volumes:
+      - ./apps/api:/var/www/html
+    networks: [edge-net, data-net]
+    depends_on:
+      postgres: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+    restart: unless-stopped
+
+  # ── Staff Portal — มี KEK และต่อ Garage ได้ ──────────────────
+  portal:
+    <<: *php-build
+    environment:
+      <<: [*php-env, *pii-env, *garage-env]
+      APP_ROLE: portal
+      APP_URL: http://localhost:${STAFF_PORT:-8081}
+    volumes:
+      - ./apps/api:/var/www/html
+    networks: [edge-net, data-net, garage-net]
+    depends_on:
+      postgres: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+      garage: { condition: service_started }
+    restart: unless-stopped
+
+  # ── queue worker — งานเอกสาร/เข้ารหัส จึงต้องมี KEK ──────────
+  worker:
+    <<: *php-build
+    command: ["php", "artisan", "queue:work", "--tries=3", "--max-time=3600"]
+    user: www-data
+    environment:
+      <<: [*php-env, *pii-env, *garage-env]
+      APP_ROLE: worker
+    volumes:
+      - ./apps/api:/var/www/html
+    networks: [data-net, garage-net]
+    depends_on:
+      postgres: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+    restart: unless-stopped
+
+  # ── scheduler — retention ใช้ crypto-shredding จึงไม่ต้องมี KEK (§10.3)
+  scheduler:
+    <<: *php-build
+    command: ["php", "artisan", "schedule:work"]
+    user: www-data
+    environment:
+      <<: [*php-env, *garage-env]
+      APP_ROLE: scheduler
+    volumes:
+      - ./apps/api:/var/www/html
+    networks: [data-net, garage-net]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+
+  # ── data ─────────────────────────────────────────────────────
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mvp}
+      POSTGRES_USER: ${POSTGRES_USER:-mvp}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+    volumes:
+      # 🔴 Postgres 18+ เปลี่ยน layout: PGDATA ย้ายไป /var/lib/postgresql/18/docker
+      #    ต้อง mount ทั้ง /var/lib/postgresql ไม่ใช่ /var/lib/postgresql/data
+      #    (image จะ error ทันทีถ้า mount แบบเดิม — docker-library/postgres#1259)
+      - pgdata:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    networks: [data-net]
+    # ports: ไม่ publish — เข้าถึงผ่าน `make psql` เท่านั้น (S18)
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mvp} -d ${POSTGRES_DB:-mvp}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    command:
+      - valkey-server
+      - --appendonly
+      - "yes"        # nonce กัน replay ต้องรอด restart ไม่งั้น replay window เปิด (S2)
+    volumes:
+      - valkeydata:/data
+    networks: [data-net]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  garage:
+    image: dxflrs/garage:v1.0.1
+    volumes:
+      - ./docker/garage/garage.toml:/etc/garage.toml:ro
+      - garagemeta:/var/lib/garage/meta
+      - garagedata:/var/lib/garage/data
+      - ./.data/secrets:/run/secrets:ro
+    networks: [garage-net]
+    # ports: ไม่ publish — เข้าถึงจาก portal/worker/scheduler เท่านั้น
+    restart: unless-stopped
+
+  # ── dev only ─────────────────────────────────────────────────
+  mailpit:
+    image: axllent/mailpit:v1.21
+    ports:
+      - "${MAILPIT_PORT:-8025}:8025"
+    networks: [data-net]
+    restart: unless-stopped
+
+networks:
+  edge-net:
+    driver: bridge
+  data-net:
+    driver: bridge
+  garage-net:
+    driver: bridge
+    # 🔴 `api` ไม่อยู่ใน network นี้โดยเจตนา (ADR 0007)
+    #    เป็นการป้องกันชั้นที่สอง ไม่พึ่งความถูกต้องของ config อย่างเดียว
+
+volumes:
+  pgdata:
+  valkeydata:
+  garagemeta:
+  garagedata:
