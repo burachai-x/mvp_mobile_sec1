@@ -227,6 +227,10 @@ chore(deps): bump laravel/framework to 13.2.0
 - เปิด/ปิด route ต้องทำที่ **route registration ตาม `APP_ROLE`** ไม่ใช่ middleware
   route ของอีกฝั่งต้อง **ไม่ถูกลงทะเบียนเลย** ให้ได้ `404` ตามธรรมชาติ
 - ต้องมี test ยืนยันว่า `APP_ROLE=api` แล้ว `/staff` ตอบ `404` และไม่มี KEK ใน environment
+- **nginx ต้อง resolve upstream ใหม่ทุก request** (`resolver 127.0.0.11` + `set $upstream ...`)
+  ถ้า `fastcgi_pass api:9000;` ตรงๆ nginx จะ cache IP ตอน start พอ recreate container
+  IP สลับกัน แล้ว `api` จะเสิร์ฟ `/staff` โดยไม่มีอะไรฟ้อง — เจอจริงตอนพัฒนา
+  รัน `make verify-isolation` หลัง recreate container ทุกครั้ง
 - `scheduler` **ไม่ต้องมี KEK** — crypto-shredding แค่ *ลบ* `dek_wrapped` ไม่ได้ *ถอด* อะไร
 
 ### Valkey ไม่ใช่ Redis

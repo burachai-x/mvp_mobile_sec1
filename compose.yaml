@@ -40,6 +40,10 @@ x-php-env: &php-env
   # MVP รัน attestation แบบ monitor mode — สลับเป็นบังคับด้วย flag นี้ (§4.2)
   KEY_ATTESTATION_ENFORCE: ${KEY_ATTESTATION_ENFORCE:-false}
 
+  # public key อย่างเดียว — api ต้อง verify token ตอน enroll แต่ต้องออก token ไม่ได้
+  # ถ้า api ถูกเจาะแล้วมี private key อยู่ด้วย attacker จะออก activation code เองได้
+  ACTIVATION_JWT_PUBLIC_KEY: ${ACTIVATION_JWT_PUBLIC_KEY:-}
+
 # 🔴 api กับ portal ลงทะเบียน route และ provider คนละชุดตาม APP_ROLE
 #    แต่ dev แชร์ bootstrap/cache ผ่าน bind mount เดียวกัน
 #    ถ้าใช้ path เดียวกัน cache ของ role หนึ่งจะทับอีก role → route หายทั้งฝั่ง
@@ -63,6 +67,7 @@ x-pii-env: &pii-env
   DOCUMENT_KEK: ${DOCUMENT_KEK:?required}
   DOCUMENT_KEK_VERSION: ${DOCUMENT_KEK_VERSION:-1}
   NATIONAL_ID_ENCRYPTION_KEY: ${NATIONAL_ID_ENCRYPTION_KEY:?required}
+  # private key ออก token ได้ จึงอยู่เฉพาะ portal ที่เจ้าหน้าที่ใช้ออก code
   ACTIVATION_JWT_PRIVATE_KEY: ${ACTIVATION_JWT_PRIVATE_KEY:-}
 
 x-garage-env: &garage-env

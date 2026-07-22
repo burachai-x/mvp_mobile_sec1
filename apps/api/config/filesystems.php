@@ -47,6 +47,28 @@ return [
             'report' => false,
         ],
 
+        /*
+         * Encrypted driver documents (ADR 0004, 0005).
+         *
+         * Garage speaks the S3 API but does not support virtual-host style
+         * addressing, so path-style is mandatory — without it every request
+         * fails to resolve.
+         *
+         * Only portal/worker/scheduler get credentials for this; the api
+         * container has neither the keys nor a network route (ADR 0007).
+         */
+        'garage' => [
+            'driver' => 's3',
+            'key' => env('GARAGE_ACCESS_KEY'),
+            'secret' => env('GARAGE_SECRET_KEY'),
+            'region' => env('GARAGE_REGION', 'garage'),
+            'bucket' => env('GARAGE_BUCKET', 'driver-documents'),
+            'endpoint' => env('GARAGE_ENDPOINT'),
+            'use_path_style_endpoint' => true,
+            'throw' => true,
+            'visibility' => 'private',
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

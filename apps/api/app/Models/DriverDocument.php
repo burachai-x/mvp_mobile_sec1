@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Casts\Base64Binary;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -51,6 +52,11 @@ class DriverDocument extends Model
     protected function casts(): array
     {
         return [
+            'dek_wrapped' => Base64Binary::class,
+            'dek_iv' => Base64Binary::class,
+            'dek_tag' => Base64Binary::class,
+            'iv' => Base64Binary::class,
+            'auth_tag' => Base64Binary::class,
             'size_bytes' => 'integer',
             'kek_version' => 'integer',
             'created_at' => 'datetime',

@@ -30,6 +30,12 @@
 - Masking ข้อมูลส่วนบุคคลเป็นค่าเริ่มต้น + step-up PIN 10 นาที + audit ทุกครั้ง
 - `.gitleaks.toml` พร้อม rule เฉพาะโปรเจกต์ (KEK, pepper, manifest key, เลขบัตร 13 หลัก)
 
+### Fixed
+- nginx cache IP ของ upstream ตอน start ทำให้ `api` กับ `portal` สลับกันหลัง recreate
+  container — แก้ด้วย `resolver` + ตัวแปรใน `fastcgi_pass`
+- คอลัมน์ envelope encryption เปลี่ยนจาก `bytea` เป็น `text` + base64
+  เพราะ Eloquent bind เป็น string แล้ว PostgreSQL ปฏิเสธ AES output ที่ไม่ใช่ UTF-8
+
 ### Notes
 - ยังไม่มีโค้ดแอปพลิเคชัน — `make install` เพื่อติดตั้ง Laravel
 - **PostgreSQL 18+ เปลี่ยน layout ของ data directory** ต้อง mount volume ที่ `/var/lib/postgresql`

@@ -19,6 +19,12 @@ return [
     // AES-256-GCM key for national ID at rest (§5).
     'national_id_key' => env('NATIONAL_ID_ENCRYPTION_KEY'),
 
+    // ES256 keypair for the activation QR token (§6.2).
+    // Asymmetric on purpose: an HS256 shared secret would have to ship inside
+    // the APK, and anyone extracting it could mint their own activation codes.
+    'activation_jwt_private_key' => env('ACTIVATION_JWT_PRIVATE_KEY'),
+    'activation_jwt_public_key' => env('ACTIVATION_JWT_PUBLIC_KEY'),
+
     // Key-encryption key wrapping each document's DEK (ADR 0005).
     // Losing it makes every stored document unrecoverable — that is by design,
     // and is what makes crypto-shredding work (§10.3).

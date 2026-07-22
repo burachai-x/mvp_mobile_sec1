@@ -33,12 +33,20 @@ return new class extends Migration
             $table->string('content_type', 100);
             $table->unsignedBigInteger('size_bytes');
 
-            // Envelope encryption, AES-256-GCM (ADR 0005)
-            $table->binary('dek_wrapped')->nullable();
-            $table->binary('dek_iv')->nullable();
-            $table->binary('dek_tag')->nullable();
-            $table->binary('iv');
-            $table->binary('auth_tag');
+            // Envelope encryption, AES-256-GCM (ADR 0005).
+            //
+            // Stored base64 in text columns rather than bytea: Eloquent binds
+            // parameters as strings, and PostgreSQL rejects raw AES output as
+            // invalid UTF-8 before it ever reaches a bytea column. Making this
+            // work with bytea needs PDO::PARAM_LOB on every write, which is easy
+            // to forget once and hard to notice. These values are 12-48 bytes,
+            // so the base64 overhead is irrelevant.
+            // The Base64Binary cast keeps the model API binary in / binary out.
+            $table->text('dek_wrapped')->nullable();
+            $table->text('dek_iv')->nullable();
+            $table->text('dek_tag')->nullable();
+            $table->text('iv');
+            $table->text('auth_tag');
             // Lets the KEK rotate without re-encrypting every object.
             $table->smallInteger('kek_version')->default(1);
 
