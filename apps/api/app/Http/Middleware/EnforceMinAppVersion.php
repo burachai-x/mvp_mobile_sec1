@@ -20,7 +20,7 @@ final class EnforceMinAppVersion
 {
     public function handle(Request $request, Closure $next): Response
     {
-        $min = (int) env('MIN_SUPPORTED_APP_VERSION', 1);
+        $min = (int) config('security.min_supported_app_version', 1);
 
         // "1.4.2+142" -> 142
         $header = (string) $request->header('X-App-Version', '');

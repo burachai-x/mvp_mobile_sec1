@@ -31,6 +31,16 @@
 - `.gitleaks.toml` พร้อม rule เฉพาะโปรเจกต์ (KEK, pepper, manifest key, เลขบัตร 13 หลัก)
 
 ### Fixed
+- **rate limit เป็น bucket เดียวทั้งระบบ** — nginx ไม่ส่ง X-Forwarded-For และไม่มี TrustProxies
+  ทำให้ทุก request มาจาก IP ของ proxy · แก้ + ใช้ named limiter แยกตาม endpoint และผูกกับอุปกรณ์
+- **client ปลอม X-Forwarded-For เลี่ยง rate limit ได้** — `$proxy_add_x_forwarded_for` ต่อท้ายค่าที่
+  client ส่งมา แก้เป็น `$remote_addr` เขียนทับเสมอ
+- 429 ไม่ใช้ error contract — แก้ให้คืน `E_RATE_LIMITED` ตาม §7
+- `make test` ลบฐานข้อมูล dev ทิ้งทุกครั้ง และ nonce/rate limit ค้างใน Valkey ข้ามการรัน
+  — phpunit `force="true"` ไม่ทับ `$_SERVER` ที่ Docker ตั้งไว้ แก้ด้วย `tests/bootstrap.php`
+- `MIN_SUPPORTED_APP_VERSION` อ่านผ่าน `env()` ตอน runtime ซึ่งจะเงียบๆ กลับไปใช้ค่า default
+  เมื่อรัน `config:cache` — ย้ายไปเป็น config key
+- PIN ที่อ่อนเกินไปเผา pin_setup_token ทิ้ง ทำให้พิมพ์ผิดครั้งเดียวต้องกลับไปหาเจ้าหน้าที่
 - nginx cache IP ของ upstream ตอน start ทำให้ `api` กับ `portal` สลับกันหลัง recreate
   container — แก้ด้วย `resolver` + ตัวแปรใน `fastcgi_pass`
 - คอลัมน์ envelope encryption เปลี่ยนจาก `bytea` เป็น `text` + base64

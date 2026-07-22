@@ -11,6 +11,7 @@ use App\Models\Driver;
 use App\Models\DriverDocument;
 use App\Models\Staff;
 use Illuminate\Database\Eloquent\Model;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 /**
@@ -47,17 +48,17 @@ final class NoSecretLeakTest extends TestCase
      * @param  class-string<Model>  $modelClass
      * @param  list<string>  $secrets
      */
-    #[\PHPUnit\Framework\Attributes\DataProvider('secretsPerModel')]
+    #[DataProvider('secretsPerModel')]
     public function test_secret_columns_are_hidden_from_serialisation(string $modelClass, array $secrets): void
     {
-        $hidden = (new $modelClass())->getHidden();
+        $hidden = (new $modelClass)->getHidden();
 
         foreach ($secrets as $column) {
             $this->assertContains(
                 $column,
                 $hidden,
                 "{$modelClass}::\$hidden must contain '{$column}' — otherwise toArray() and "
-                ."any JSON response leak it (CLAUDE.md §6)."
+                .'any JSON response leak it (CLAUDE.md §6).'
             );
         }
     }

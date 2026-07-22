@@ -67,7 +67,7 @@ final class EnrollController
 
         // (c)(d) Device health. Recorded either way; only blocks once
         // KEY_ATTESTATION_ENFORCE is on (§4.2).
-        $assessment = (new AttestationVerifier())->assess(
+        $assessment = (new AttestationVerifier)->assess(
             $data['key_attestation'] ?? [],
             $data['integrity'] ?? [],
         );

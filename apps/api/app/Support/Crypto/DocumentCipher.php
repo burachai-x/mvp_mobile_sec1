@@ -22,8 +22,11 @@ use SensitiveParameter;
 final class DocumentCipher
 {
     private const CIPHER = 'aes-256-gcm';
+
     private const IV_LEN = 12;
+
     private const TAG_LEN = 16;
+
     private const DEK_LEN = 32;
 
     public function __construct(

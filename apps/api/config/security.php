@@ -38,6 +38,18 @@ return [
         array_map('trim', explode(',', (string) env('APP_SIGNATURE_SHA256_ALLOWLIST', '')))
     )),
 
+    // Read through config, not env(), because `php artisan config:cache`
+    // (mandatory in production per CLAUDE.md §5) stops .env from being loaded at
+    // runtime. An env() call there silently falls back to its default, which for
+    // a version gate means the check quietly turns itself off.
+    'min_supported_app_version' => (int) env('MIN_SUPPORTED_APP_VERSION', 1),
+
+    'rate_limits' => [
+        'enroll_per_hour' => 10,
+        'pin_setup_per_hour' => 5,
+        'pin_verify_per_minute' => 10,
+    ],
+
     'request_signature' => [
         // Accepted clock skew for X-Timestamp, seconds.
         'max_skew' => 60,

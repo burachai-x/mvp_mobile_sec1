@@ -48,14 +48,8 @@ final class PinController
             return ApiError::deviceSignatureInvalid($request);
         }
 
-        // pull() makes it single-use: a leaked setup token cannot be replayed to
-        // overwrite the PIN later.
-        $expected = Cache::pull("pin_setup:{$deviceId}");
-
-        if (! is_string($expected) || ! hash_equals($expected, hash('sha256', $data['pin_setup_token']))) {
-            return ApiError::deviceSignatureInvalid($request);
-        }
-
+        // Checked before the token is consumed: a driver who types 123456 gets a
+        // second try instead of having to go back to staff for a reset over a typo.
         if ($this->isWeak($data['pin'])) {
             return ApiError::make(
                 $request,
@@ -63,6 +57,14 @@ final class PinController
                 'This PIN is too easy to guess. Choose another.',
                 422,
             );
+        }
+
+        // pull() makes it single-use: a leaked setup token cannot be replayed to
+        // overwrite the PIN later.
+        $expected = Cache::pull("pin_setup:{$deviceId}");
+
+        if (! is_string($expected) || ! hash_equals($expected, hash('sha256', $data['pin_setup_token']))) {
+            return ApiError::deviceSignatureInvalid($request);
         }
 
         DB::transaction(function () use ($device, $data, $request): void {

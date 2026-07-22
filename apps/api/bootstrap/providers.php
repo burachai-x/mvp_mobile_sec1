@@ -1,5 +1,9 @@
 <?php
 
+use App\Providers\AppServiceProvider;
+use App\Providers\Filament\StaffPanelProvider;
+use App\Providers\RateLimitServiceProvider;
+
 /**
  * Filament registers its panel routes when its provider boots, which would put
  * /staff back into the API container and defeat the split in ADR 0007.
@@ -8,11 +12,12 @@
  * internet-facing container has no staff routes at all.
  */
 $providers = [
-    App\Providers\AppServiceProvider::class,
+    AppServiceProvider::class,
+    RateLimitServiceProvider::class,
 ];
 
 if (env('APP_ROLE', 'portal') === 'portal') {
-    $providers[] = App\Providers\Filament\StaffPanelProvider::class;
+    $providers[] = StaffPanelProvider::class;
 }
 
 return $providers;

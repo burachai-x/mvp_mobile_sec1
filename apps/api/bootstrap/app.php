@@ -33,7 +33,13 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // nginx is the only way in — neither app container publishes a port —
+        // so X-Forwarded-For can be believed. Without this every request looks
+        // like it came from nginx and per-IP rate limits collapse into one
+        // shared bucket for the whole fleet.
+        $middleware->trustProxies(
+            at: explode(',', (string) env('TRUSTED_PROXIES', '10.0.0.0/8,172.16.0.0/12,192.168.0.0/16')),
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

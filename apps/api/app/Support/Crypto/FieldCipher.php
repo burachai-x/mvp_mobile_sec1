@@ -17,7 +17,9 @@ use SensitiveParameter;
 final class FieldCipher
 {
     private const CIPHER = 'aes-256-gcm';
+
     private const IV_LEN = 12;   // GCM standard; other lengths weaken the mode
+
     private const TAG_LEN = 16;
 
     public function __construct(private readonly ?string $key) {}

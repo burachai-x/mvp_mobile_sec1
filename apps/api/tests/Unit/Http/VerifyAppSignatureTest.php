@@ -22,7 +22,7 @@ final class VerifyAppSignatureTest extends TestCase
 {
     private function pass(Request $request): HttpResponse
     {
-        return (new VerifyAppSignature())->handle(
+        return (new VerifyAppSignature)->handle(
             $request,
             fn () => new Response('reached', 200),
         );

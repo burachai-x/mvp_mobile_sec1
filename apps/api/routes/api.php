@@ -26,13 +26,13 @@ Route::prefix('api/v1')
         // No device signature yet: the keypair is created during this call, so
         // the server has nothing to verify against until it completes.
         Route::post('devices/enroll', EnrollController::class)
-            ->middleware('throttle:10,60');
+            ->middleware('throttle:enroll');
 
         // Signed with the key from enrollment, which is what proves the caller
         // is the device that just enrolled.
         Route::post('devices/{deviceId}/pin', [PinController::class, 'store'])
-            ->middleware([VerifyDeviceSignature::class, 'throttle:5,60']);
+            ->middleware([VerifyDeviceSignature::class, 'throttle:pin-setup']);
 
         Route::post('auth/pin/verify', [PinController::class, 'verify'])
-            ->middleware([VerifyDeviceSignature::class, 'throttle:10,1']);
+            ->middleware([VerifyDeviceSignature::class, 'throttle:pin-verify']);
     });

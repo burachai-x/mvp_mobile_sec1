@@ -24,6 +24,7 @@ use Throwable;
 final class ActivationToken
 {
     private const ALGORITHM = 'ES256';
+
     private const AUDIENCE = 'enroll';
 
     public function __construct(
