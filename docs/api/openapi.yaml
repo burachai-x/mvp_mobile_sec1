@@ -1,0 +1,1204 @@
+openapi: 3.1.0
+
+info:
+  title: Mobile Device Enrollment & Security API
+  version: 1.0.0-draft
+  description: |
+    API สำหรับลงทะเบียนอุปกรณ์และพิสูจน์ตัวตนของแอป Flutter ตาม `PRD.md`
+
+    **เอกสารนี้เป็น source of truth ของ contract** — ถ้าโค้ดไม่ตรงกับที่นี่ ให้ถือว่าโค้ดผิด
+
+    ผู้ใช้ระบบมี 2 กลุ่ม — **เจ้าหน้าที่** (staff) ทำงานผ่าน Staff Portal
+    และ **คนขับรถ** (driver) ใช้แอป Flutter เพื่อรับงานส่งของ
+
+    ### ไม่มี self-registration
+    คนขับ**ยื่นเอกสารกระดาษ** (ใบสมัคร + สำเนาบัตรประชาชน + สำเนาใบขับขี่)
+    เจ้าหน้าที่ตรวจแล้วถ้าอนุมัติจึงเป็นคนกรอกข้อมูลเข้าระบบ + อัปโหลดเอกสารเอง
+    → **คนขับไม่เคยส่งข้อมูลส่วนตัวผ่าน API** และไม่มีสถานะรออนุมัติในระบบ
+
+    ลำดับ: เจ้าหน้าที่สร้าง driver → ออก activation code ผูกกับ driver → คนขับสแกน QR enroll → ตั้ง PIN
+
+    **คนขับ 1 คน : อุปกรณ์ 1 เครื่อง** เปลี่ยนมือถือต้องแจ้งเจ้าหน้าที่ลบเครื่องเก่าก่อน
+
+    ### สอง container คนละ host
+    | | `api` | `portal` |
+    | --- | --- | --- |
+    | host | `api.example` | `staff.example` (จำกัด IP / VPN) |
+    | tag ใน spec นี้ | `enrollment` `auth` `integrity` `system` | `admin` `pii` `retention` |
+    | `DOCUMENT_KEK` | **ไม่มี** | มี |
+    | ต่อ Garage | **ไม่ได้** | ได้ |
+
+    โค้ดเบสเดียวกัน แยกด้วย `APP_ROLE` — route ของอีกฝั่ง **ไม่ถูกลงทะเบียนเลย** จึงได้ `404` (ADR 0007)
+
+    Staff Portal เป็น server-rendered (`/staff`) ใช้ session cookie ไม่ได้อยู่ใน spec นี้
+    ยกเว้น endpoint ใต้ tag `admin` / `pii` / `retention` ซึ่งเป็น JSON endpoint ที่ portal เรียกเอง
+
+    ## Header ที่ทุก request จากแอปต้องแนบ
+    | header | ความหมาย | ชั้นความเชื่อถือ |
+    | --- | --- | --- |
+    | `X-App-Signature` | SHA-256 fingerprint ของ signing cert (PRD §2.3) | L1 — อ่อน เป็นแค่ signal |
+    | `X-App-Version` | เวอร์ชันแอป `MAJOR.MINOR.PATCH+BUILD` | ใช้บังคับอัปเดต |
+    | `X-Request-Id` | UUID v4 ต่อ request ใช้ trace ใน log | - |
+    | `X-Timestamp` | unix seconds — ยอมรับ skew ±60 วินาที | กัน replay |
+    | `X-Nonce` | UUID v4 ห้ามซ้ำภายใน 5 นาที | กัน replay |
+    | `X-Device-Signature` | ECDSA P-256 ของ canonical request | **L2 — ชั้นที่แข็งจริง** |
+
+    `X-Device-Signature` คำนวณจาก
+    `base64( ECDSA_P256_SHA256( METHOD + "\n" + PATH + "\n" + sha256_hex(body) + "\n" + X-Timestamp + "\n" + X-Nonce ) )`
+
+  contact:
+    name: ดู docs/architecture.md
+
+servers:
+  - url: https://api.example/api/v1
+    description: |
+      **API สำหรับแอปคนขับ** — container `api` (ADR 0007)
+      container นี้ **ไม่มี `DOCUMENT_KEK` และต่อ Garage ไม่ได้ในระดับเครือข่าย** โดยเจตนา
+      แอปทำ certificate pinning กับ host นี้ (§11.5) · hostname จริงรอกำหนด
+
+tags:
+  - name: enrollment
+    description: ลงทะเบียนคนขับ/อุปกรณ์ และตั้ง PIN
+  - name: auth
+    description: ปลดล็อกด้วย PIN และต่ออายุ token
+  - name: integrity
+    description: รายงานสภาพเครื่อง
+  - name: system
+  - name: app-update
+    description: |
+      กลไกอัปเดตแอปแบบ sideload — **ไม่อยู่ใต้ `/api/v1`** เพราะแอปทุกเวอร์ชันต้องเรียกได้
+      รวมถึงเวอร์ชันที่เก่าเกินกว่าจะคุยกับ API ปัจจุบันแล้ว
+  - name: admin
+    description: endpoint ที่ Staff Portal เรียก (session cookie + CSRF)
+  - name: pii
+    description: |
+      เข้าถึงข้อมูลส่วนบุคคล — ต้องมีสิทธิ์ **และ** ยกระดับสิทธิ์ด้วย PIN ก่อนเสมอ
+      ทุกการเรียกถูกบันทึกลง `audit_logs` แยกรายครั้ง
+  - name: retention
+    description: ตั้งค่าระยะเวลาเก็บข้อมูล (ผู้ดูแลระบบ)
+
+paths:
+
+  /health:
+    get:
+      tags: [system]
+      summary: Health check
+      security: []
+      responses:
+        '200':
+          description: ปกติ
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ok] }
+                  version: { type: string, example: "1.2.3" }
+        '503':
+          description: dependency บางตัวใช้ไม่ได้ (postgres / valkey / garage)
+
+  /app/v1/manifest.json:
+    servers:
+      - url: https://dl.example
+        description: |
+          **คนละ hostname กับ API โดยตั้งใจ** — ไม่มี prefix `/api/v1`
+          host นี้ **ห้าม pin certificate** เพราะเป็นช่องทางกู้คืน (§11.5)
+    get:
+      tags: [app-update]
+      summary: manifest สำหรับให้แอปเช็คเวอร์ชันและอัปเดตตัวเอง
+      description: |
+        แอปเรียก endpoint นี้ **ทุกครั้งที่เปิด** แอปยังไม่ต้องล็อกอินหรือ enroll ก็เรียกได้
+
+        ### 🔴 `payload` ต้องถูกลงนาม — HTTPS อย่างเดียวไม่พอ
+        endpoint นี้สั่งให้โทรศัพท์คนขับทุกเครื่องดาวน์โหลดและติดตั้งไฟล์ได้
+        ใครควบคุมมันได้ = **ส่งมัลแวร์ลงทุกเครื่องพร้อมกัน**
+
+        HTTPS ป้องกันแค่คนดักกลางทาง **ไม่ป้องกัน** เซิร์ฟเวอร์ถูกเจาะ / บัญชี CDN หลุด /
+        CA ออกใบรับรองผิดพลาดหรือถูกบังคับ / คนในที่เข้าถึงเครื่องได้
+
+        `payload` จึงต้องลงนามด้วย **release signing key แยกต่างหาก (ES256 หรือ Ed25519)
+        ที่ไม่ได้อยู่บนเซิร์ฟเวอร์** — ลงนามออฟไลน์หรือใน CI แล้วอัปโหลดเฉพาะไฟล์ที่ลงนามแล้ว
+        public key ฝังในแอป พร้อม **backup public key อย่างน้อย 1 ตัวตั้งแต่เวอร์ชันแรก**
+
+        ### สิ่งที่แอปต้องตรวจก่อนติดตั้ง — ครบทุกข้อ
+        1. ลายเซ็นของ `payload` ถูกต้องตาม public key ที่ฝังไว้
+        2. `expires_at` ยังไม่หมดอายุ — กัน **freeze attack** (เสิร์ฟ manifest เก่าค้างไว้เพื่อกันไม่ให้อัปเดตออกจากเวอร์ชันที่มีช่องโหว่)
+        3. `sequence` มากกว่าค่าที่เครื่องเคยเห็น — กัน **replay** manifest เก่าที่ลงนามถูกต้อง
+        4. `latest_version_code` > versionCode ที่ติดตั้งอยู่ — **ห้าม downgrade เด็ดขาด**
+        5. `apk_sha256` ของไฟล์ที่ดาวน์โหลดตรงกับใน manifest
+        6. signing cert ของ APK ตรงกับ `signing_cert_sha256` และตรงกับของแอปตัวเอง
+        7. ข้อใดไม่ผ่าน → หยุด แจ้งผู้ใช้ และรายงานขึ้น server **ห้ามลองใหม่เงียบๆ**
+
+        ดู `docs/architecture.md` §11 และ ADR 0006
+      security: []
+      responses:
+        '200':
+          description: manifest ปัจจุบัน
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UpdateManifest' }
+          headers:
+            Cache-Control:
+              schema: { type: string, example: 'public, max-age=300' }
+              description: cache สั้นๆ ได้ — ความถูกต้องมาจากลายเซ็น ไม่ใช่จาก transport
+
+  /devices/enroll:
+    post:
+      tags: [enrollment]
+      summary: ลงทะเบียนอุปกรณ์ด้วย activation token
+      description: |
+        เรียกครั้งเดียวต่อ activation code ทำงานใน transaction เดียว
+        ยังไม่ต้องมี `X-Device-Signature` เพราะ server ยังไม่รู้จัก public key
+        แต่ต้องส่ง `public_key` มาในนี้เพื่อใช้ตรวจลายเซ็นในขั้นตอนถัดไป
+
+        ลำดับการตรวจ (fail-fast):
+        1. `X-App-Signature` อยู่ใน allowlist ไหม
+        2. `activation_token` ลายเซ็นถูก / ยังไม่หมดอายุ / ยังไม่ถูกใช้ / ไม่ถูกเพิกถอน
+        3. integrity verdict ผ่านเกณฑ์ไหม (MVP ใช้ NullVerifier — ผ่านเสมอ แต่ยังบันทึกผล)
+        4. **Android Key Attestation** — ตรวจ certificate chain ถึง root ของ Google แล้วอ่าน
+           `verifiedBootState` / `deviceLocked` / `securityLevel`
+           **นี่คือชั้นเดียวที่ตรวจสภาพเครื่องได้จริง** เพราะ TEE เป็นคนเซ็น แอปปลอมไม่ได้
+           ต่างจาก `integrity` ใน body ที่มาจากแอปและปลอมได้ทั้งหมด
+
+           **MVP รันแบบ monitor mode** — บันทึกผลและแจ้งเตือน แต่ยังให้ enroll ผ่าน
+           สลับเป็นบังคับ (`403`) ได้ด้วย feature flag ฝั่ง server เมื่อเก็บสถิติพอแล้ว (§4.2)
+        5. คนขับที่ผูกกับ code ยังไม่มีเครื่องใช้งานอยู่ (กฎ 1:1)
+
+        **ไม่มีข้อมูลคนขับใน request นี้** — server รู้อยู่แล้วจาก `activation_codes.driver_id`
+        ซึ่งเจ้าหน้าที่ผูกไว้ตอนออก code
+
+        ดู `docs/architecture.md` §6.3
+      security:
+        - appSignature: []
+      parameters:
+        - $ref: '#/components/parameters/XAppVersion'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XTimestamp'
+        - $ref: '#/components/parameters/XNonce'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/EnrollRequest' }
+      responses:
+        '201':
+          description: ลงทะเบียนสำเร็จ — อุปกรณ์อยู่สถานะ `pending_pin` ตั้ง PIN ต่อได้เลย
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/EnrollResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '403': { $ref: '#/components/responses/ForbiddenIntegrity' }
+        '409':
+          description: |
+            `E_ACTIVATION_CODE_USED` — code ถูกใช้แล้ว หมดอายุ หรือถูกเพิกถอน
+
+            `E_DRIVER_HAS_ACTIVE_DEVICE` — คนขับคนนี้มีเครื่องใช้งานอยู่แล้ว (กฎ 1:1)
+            ต้องให้เจ้าหน้าที่ลบเครื่องเก่าก่อน (`/admin/devices/{id}/revoke`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error: { code: E_ACTIVATION_CODE_USED, message: "Activation code already used", request_id: "0f1a…" }
+        '426': { $ref: '#/components/responses/UpdateRequired' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+      x-rate-limit: 10 ครั้ง/ชั่วโมง ต่อ IP และ 5 ครั้ง/ชั่วโมง ต่อ activation code
+
+  /devices/{deviceId}/pin:
+    post:
+      tags: [enrollment]
+      summary: ตั้ง PIN ครั้งแรก (หรือหลัง Admin สั่ง reset)
+      description: |
+        ต้องเซ็น request ด้วย private key ที่สร้างตอน enroll เพื่อพิสูจน์ว่าเป็นเครื่องเดิม
+        สำเร็จแล้วอุปกรณ์เปลี่ยนเป็น `active` และได้ token ชุดแรก
+      security:
+        - appSignature: []
+          deviceSignature: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/XAppVersion'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XTimestamp'
+        - $ref: '#/components/parameters/XNonce'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin_setup_token, pin]
+              properties:
+                pin_setup_token:
+                  type: string
+                  description: ได้จาก enroll หรือจาก Admin reset — อายุ 10 นาที ใช้ได้ครั้งเดียว
+                pin:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+                  description: |
+                    6 หลักตาม PRD §3
+                    server ปฏิเสธ PIN ที่อ่อนเกินไป: เลขซ้ำทั้งหมด (`111111`),
+                    เรียงขึ้น/ลง (`123456`, `654321`) และ 100 ค่าที่พบบ่อยที่สุด
+      responses:
+        '200':
+          description: ตั้ง PIN สำเร็จ
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/UnauthorizedDevice' }
+        '422':
+          description: PIN อ่อนเกินไป
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+      x-rate-limit: 5 ครั้ง/ชั่วโมง ต่ออุปกรณ์
+
+  /auth/pin/verify:
+    post:
+      tags: [auth]
+      summary: ปลดล็อกด้วย PIN
+      description: |
+        **ต้องตรวจฝั่ง server เท่านั้น** ห้ามให้แอปเทียบ PIN เองในเครื่อง
+
+        PIN 6 หลักมีความเป็นไปได้แค่ 10⁶ จึงต้องมี lockout:
+        - ผิด 5 ครั้งติด → ล็อก 15 นาที (`423`)
+        - สะสมผิด 10 ครั้ง → `status = blocked` และแจ้ง Admin
+      security:
+        - appSignature: []
+          deviceSignature: []
+      parameters:
+        - $ref: '#/components/parameters/XAppVersion'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XTimestamp'
+        - $ref: '#/components/parameters/XNonce'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [device_id, pin]
+              properties:
+                device_id: { type: string, format: uuid }
+                pin: { type: string, pattern: '^[0-9]{6}$' }
+      responses:
+        '200':
+          description: PIN ถูกต้อง
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401':
+          description: |
+            PIN ไม่ถูกต้อง หรือลายเซ็นอุปกรณ์ไม่ผ่าน
+            **response ต้องเหมือนกันทั้งสองกรณี** เพื่อไม่ให้เดาได้ว่าพลาดตรงไหน
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '423':
+          description: ติด lockout
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error:
+                  code: E_PIN_LOCKED
+                  message: "Too many failed attempts"
+                  request_id: "0f1a…"
+                  retry_after: 900
+        '429': { $ref: '#/components/responses/RateLimited' }
+      x-rate-limit: 10 ครั้ง/นาที ต่ออุปกรณ์ (ชั้นนอกเหนือจาก lockout)
+
+  /auth/refresh:
+    post:
+      tags: [auth]
+      summary: ต่ออายุ access token
+      description: |
+        **Rotating refresh token** — refresh token เดิมถูกยกเลิกทันทีที่ใช้
+
+        ถ้ามีการใช้ refresh token ที่ถูกยกเลิกไปแล้ว แปลว่า token รั่ว
+        → ยกเลิกทุก session ของอุปกรณ์นั้น + เขียน audit log + แจ้ง Admin
+      security:
+        - appSignature: []
+          deviceSignature: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XTimestamp'
+        - $ref: '#/components/parameters/XNonce'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string }
+      responses:
+        '200':
+          description: ได้ token ชุดใหม่
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenPair' }
+        '401': { $ref: '#/components/responses/UnauthorizedDevice' }
+      x-rate-limit: 60 ครั้ง/ชั่วโมง ต่ออุปกรณ์
+
+  /devices/me/integrity:
+    post:
+      tags: [integrity]
+      summary: รายงานผลตรวจสภาพเครื่อง
+      description: |
+        แอปส่งผลตรวจขึ้นมา **ทุกครั้งที่เปิดแอป** แม้ผลจะผ่าน
+
+        PRD §2.2 ให้แอปปิดตัวเองเมื่อเจอ root — แต่ผลตรวจฝั่ง client ถูก bypass ได้ด้วย
+        Magisk Hide / Frida จึงต้องส่งขึ้น server ด้วยเสมอ ไม่งั้นเราจะไม่มีทางรู้ว่ามีคนพยายาม bypass
+
+        server คำนวณ `risk_score` แล้วเป็นคนตัดสินใจ block เอง ไม่ปล่อยให้ client ตัดสินฝ่ายเดียว
+      security:
+        - bearerAuth: []
+          appSignature: []
+          deviceSignature: []
+      parameters:
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XTimestamp'
+        - $ref: '#/components/parameters/XNonce'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/IntegritySignals' }
+      responses:
+        '202':
+          description: รับรายงานแล้ว
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  action:
+                    type: string
+                    enum: [allow, warn, block]
+                    description: คำตัดสินจาก server — แอปต้องทำตามนี้ ไม่ใช่ตามผลตรวจของตัวเอง
+        '401': { $ref: '#/components/responses/UnauthorizedDevice' }
+        '403': { $ref: '#/components/responses/ForbiddenIntegrity' }
+
+  /admin/drivers:
+    post:
+      tags: [admin]
+      summary: เจ้าหน้าที่บันทึกคนขับเข้าระบบ (หลังอนุมัติเอกสารกระดาษแล้ว)
+      description: |
+        **การอนุมัติเกิดขึ้นบนกระดาษก่อนเรียก endpoint นี้** — คนขับยื่นใบสมัคร +
+        สำเนาบัตรประชาชน + สำเนาใบขับขี่ เจ้าหน้าที่ตรวจแล้วถ้าอนุมัติจึงมาบันทึก
+
+        คนขับที่สร้างได้ `status = active` ทันที ไม่มีสถานะรออนุมัติ
+        `created_by` คือหลักฐานว่าเจ้าหน้าที่คนไหนเป็นผู้อนุมัติและบันทึก
+
+        รับเป็น **`multipart/form-data`** เพราะต้องแนบเอกสารมาพร้อมกัน
+        ไฟล์ถูกส่งขึ้น **Garage** (object storage) — ห้ามลงดิสก์ของ container
+
+        เขียน `audit_logs`: `driver.created` + `document.uploaded` ต่อไฟล์ ใน transaction เดียวกัน
+
+        ดู `docs/architecture.md` §6.1 และ §8
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              allOf:
+                - $ref: '#/components/schemas/DriverInput'
+                - type: object
+                  required: [application_form, national_id_copy, driver_license_copy]
+                  properties:
+                    application_form:
+                      type: string
+                      format: binary
+                      description: ใบสมัคร
+                    national_id_copy:
+                      type: string
+                      format: binary
+                      description: สำเนาบัตรประชาชน
+                    driver_license_copy:
+                      type: string
+                      format: binary
+                      description: สำเนาใบขับขี่
+            encoding:
+              application_form: { contentType: 'image/jpeg, image/png, application/pdf' }
+              national_id_copy: { contentType: 'image/jpeg, image/png, application/pdf' }
+              driver_license_copy: { contentType: 'image/jpeg, image/png, application/pdf' }
+      responses:
+        '201':
+          description: สร้างแล้ว — นำ `id` ไปผูกกับ activation code ในขั้นถัดไป
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string, format: uuid }
+                  full_name: { type: string }
+                  national_id_masked:
+                    type: string
+                    example: "x-xxxx-xxxxx-x4-5"
+                    description: |
+                      **คืนเป็นค่า mask เสมอ** แสดงเต็มได้เฉพาะเมื่อมีสิทธิ์
+                      และต้องเขียน `audit_logs` (`driver.pii_viewed`) ทุกครั้ง
+                  status: { type: string, enum: [active] }
+                  documents:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        type: { type: string, enum: [application_form, national_id_copy, driver_license_copy] }
+                        sha256: { type: string }
+                    description: '**ไม่คืน `object_key`** — ดาวน์โหลดผ่าน endpoint `/download` ที่ต้องใส่ PIN เท่านั้น'
+        '401': { description: ยังไม่ได้ล็อกอิน }
+        '409':
+          description: เลขบัตรประชาชนหรือรหัสพนักงานนี้มีอยู่แล้ว (`E_DRIVER_ALREADY_EXISTS`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '415':
+          description: ชนิดไฟล์ไม่ได้รับอนุญาต — ตรวจจาก magic bytes ไม่ใช่จาก header หรือนามสกุล
+        '422': { description: ไฟล์ใหญ่เกินกำหนด (10 MB ต่อไฟล์) }
+      x-rate-limit: 120 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่
+
+  /admin/session/elevate:
+    post:
+      tags: [pii]
+      summary: ยกระดับสิทธิ์ด้วย PIN (step-up authentication)
+      description: |
+        ต้องเรียกก่อนดูข้อมูลส่วนบุคคลแบบเต็มหรือดาวน์โหลดเอกสาร
+
+        `pin` คือ **PIN สำหรับเข้าถึงข้อมูล คนละตัวกับรหัสผ่านล็อกอิน** (`staff.data_access_pin_hash`)
+        การมี PIN อย่างเดียวไม่พอ — บัญชีต้องมีสิทธิ์ `can_view_pii` หรือ `can_download_documents` ด้วย
+
+        สำเร็จแล้วได้ **elevated session อายุ 10 นาที** ใช้เรียก endpoint ที่ต้องยกระดับสิทธิ์ได้หลายครั้ง
+        โดย **ทุกครั้งที่เรียกยังถูกบันทึกแยกรายการเสมอ** ไม่ใช่บันทึกแค่ตอนใส่ PIN
+
+        เหตุผลที่ไม่บังคับใส่ PIN ทุกครั้ง: เจ้าหน้าที่ที่ต้องเปิดเอกสาร 3 ไฟล์ของคนเดียวกัน
+        จะต้องพิมพ์ PIN 3 รอบ ซึ่งนำไปสู่การจดรหัสแปะไว้ข้างจอ
+        ถ้าต้องการเข้มกว่านี้ ตั้ง TTL = 0 ได้โดยไม่ต้องแก้ contract
+
+        ผิด PIN 5 ครั้งติด → ล็อก 15 นาที (`423`) และแจ้งเตือนผู้ดูแล
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin, reason]
+              properties:
+                pin:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+                  description: '**ห้าม log ค่านี้ไม่ว่ากรณีใด**'
+                reason:
+                  type: string
+                  maxLength: 255
+                  description: |
+                    **บังคับกรอก** เหตุผลที่ต้องเข้าถึงข้อมูล — ถูกบันทึกลง `audit_logs`
+                    ทำให้การเปิดดูโดยไม่มีเหตุอันควรเป็นเรื่องที่ต้องอธิบายภายหลัง
+      responses:
+        '201':
+          description: ยกระดับสิทธิ์แล้ว
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  elevation_id:
+                    type: string
+                    format: uuid
+                    description: ผูกกับทุก audit record ที่เกิดภายใต้การยกระดับครั้งนี้
+                  expires_at: { type: string, format: date-time }
+                  scopes:
+                    type: array
+                    items: { type: string, enum: [view_pii, download_documents] }
+                    description: ได้เฉพาะ scope ที่บัญชีมีสิทธิ์อยู่แล้ว
+        '401': { description: PIN ไม่ถูกต้อง — ตอบเหมือนกันทุกกรณีที่ล้มเหลว }
+        '403': { description: บัญชีไม่มีสิทธิ์เข้าถึงข้อมูลส่วนบุคคลเลย }
+        '423':
+          description: PIN ถูกล็อกชั่วคราว (`E_PIN_LOCKED`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+      x-rate-limit: 10 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่
+
+  /admin/drivers/{driverId}/reveal:
+    post:
+      tags: [pii]
+      summary: ขอดูข้อมูลส่วนบุคคลแบบเต็ม (ไม่ mask)
+      description: |
+        ปกติ API คืนข้อมูลคนขับแบบ **mask** เสมอ endpoint นี้คือทางเดียวที่จะเห็นค่าเต็ม
+
+        ต้องมี **elevated session** ที่ยังไม่หมดอายุ (`/admin/session/elevate`) และสิทธิ์ `can_view_pii`
+
+        **การ mask ต้องทำที่ชั้น serialization ของ API ไม่ใช่ที่ frontend** —
+        ถ้า mask ที่ frontend แปลว่าข้อมูลเต็มถูกส่งออกไปแล้ว ใครเปิด devtools ก็เห็น เท่ากับไม่ได้ mask
+
+        เขียน `audit_logs` (`driver.pii_viewed`) **ทุกครั้งที่เรียก** พร้อม `fields`, `reason`, `elevation_id`
+
+        ใช้ `POST` เพราะการเรียกนี้สร้าง audit record จึงไม่ใช่ operation ที่ปลอดผลข้างเคียง
+      security:
+        - adminSession: []
+          elevatedSession: []
+      parameters:
+        - $ref: '#/components/parameters/DriverId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fields]
+              properties:
+                fields:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: string
+                    enum: [national_id, phone, license_number]
+                  description: ขอเฉพาะ field ที่จำเป็นจริง — ขอเผื่อไว้ทั้งหมดจะปรากฏใน audit
+      responses:
+        '200':
+          description: ค่าเต็มของ field ที่ขอ
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  national_id: { type: string }
+                  phone: { type: string }
+                  license_number: { type: string }
+        '401': { description: ยังไม่ได้ล็อกอิน }
+        '403':
+          description: |
+            ไม่มีสิทธิ์ `can_view_pii` **หรือ** ยังไม่ได้ยกระดับสิทธิ์ / elevated session หมดอายุ
+            (`E_ELEVATION_REQUIRED`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404': { description: ไม่พบคนขับ }
+        '410': { description: ข้อมูลถูกลบตาม retention แล้ว (`anonymized_at` ไม่ว่าง) }
+      x-rate-limit: 60 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่ — แจ้งเตือนเมื่อดูเกิน 20 คนใน 10 นาที
+
+  /admin/drivers/{driverId}/documents/{documentId}/download:
+    post:
+      tags: [pii]
+      summary: ดาวน์โหลดเอกสารคนขับ (ถอดรหัสฝั่ง server)
+      description: |
+        ต้องมี **elevated session** และสิทธิ์ `can_download_documents`
+
+        **ไม่ใช้ presigned URL** — เปลี่ยนจากการตัดสินใจเดิมใน ADR 0004 เพราะ
+        1. ไฟล์ใน Garage เป็น **ciphertext** ผู้ใช้เปิดไม่ออก การถอดรหัสต้องเกิดฝั่ง server เพราะ KEK อยู่ที่นั่น
+        2. presigned URL ใช้ซ้ำได้จนหมดอายุ → บังคับ PIN ต่อครั้งไม่ได้ และนับจำนวนการดาวน์โหลดจริงไม่ได้
+
+        การทำงาน: ตรวจสิทธิ์ → ตรวจ elevated session → เขียน audit → ดึง ciphertext จาก Garage
+        → แกะ DEK ด้วย KEK → ถอดรหัส **แบบ stream ทีละ chunk** → ส่งต่อ
+
+        **ห้ามโหลดทั้งไฟล์เข้า memory** และให้ route นี้อยู่ใน php-fpm pool แยก
+        เพื่อไม่ให้แย่ง worker กับ API หลัก (ดู ADR 0005)
+
+        เขียน `audit_logs` (`document.viewed`) ทุกครั้ง พร้อม `document_id`, `reason`, `elevation_id`
+      security:
+        - adminSession: []
+          elevatedSession: []
+      parameters:
+        - $ref: '#/components/parameters/DriverId'
+        - name: documentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: |
+            เนื้อไฟล์ที่ถอดรหัสแล้ว
+            ต้องส่ง `Content-Disposition: attachment` และ `Cache-Control: no-store`
+          content:
+            application/octet-stream:
+              schema: { type: string, format: binary }
+        '401': { description: ยังไม่ได้ล็อกอิน }
+        '403': { description: 'ไม่มีสิทธิ์ หรือยังไม่ได้ยกระดับสิทธิ์ (`E_ELEVATION_REQUIRED`)' }
+        '404': { description: ไม่พบเอกสาร }
+        '410':
+          description: |
+            เอกสารถูกทำลายตาม retention แล้ว (`destroyed_at` ไม่ว่าง)
+            DEK ถูกลบ → ciphertext ที่เหลือถอดไม่ได้ตลอดกาล (crypto-shredding, §10.3)
+      x-rate-limit: 30 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่ — **เกินกว่านี้คือสัญญาณของการดูดข้อมูล ต้องแจ้งเตือน**
+
+  /admin/retention-policies:
+    get:
+      tags: [retention]
+      summary: ดูค่า retention ปัจจุบัน
+      description: อ่านได้ทุก role — แก้ได้เฉพาะ `admin`
+      security:
+        - adminSession: []
+      responses:
+        '200':
+          description: รายการนโยบายทั้งหมด
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RetentionPolicy' }
+        '401': { description: ยังไม่ได้ล็อกอิน }
+
+    put:
+      tags: [retention]
+      summary: แก้ค่า retention (ผู้ดูแลระบบเท่านั้น)
+      description: |
+        หน้าจอนี้ลบข้อมูลถาวรได้ — พิมพ์ `3` แทน `30` แล้วข้อมูลคนขับเกือบทั้งหมดหายและ **กู้คืนไม่ได้**
+        เพราะการลบใช้ crypto-shredding
+
+        ตัวกันพลาดขั้นต่ำใน MVP
+        1. **validate ช่วงตัวเลขในโค้ด** (เสนอ 7–3650 วัน) → นอกช่วงตอบ `422`
+        2. role `admin` เท่านั้น **และต้องมี elevated session** (ใส่ PIN)
+        3. เขียน `audit_logs` พร้อมค่าเก่าและค่าใหม่
+
+        ดู `docs/architecture.md` §10.2
+      security:
+        - adminSession: []
+          elevatedSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [key, value_days]
+              properties:
+                key:
+                  type: string
+                  enum:
+                    - activity_log_days
+                    - integrity_report_days
+                    - driver_data_after_termination_days
+                    - document_after_termination_days
+                    - pii_access_log_days
+                value_days: { type: integer, minimum: 7, maximum: 3650 }
+      responses:
+        '200':
+          description: บันทึกและมีผลทันที
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RetentionPolicy' }
+        '401': { description: ยังไม่ได้ล็อกอิน }
+        '403': { description: 'ไม่ใช่ role `admin` หรือยังไม่ได้ยกระดับสิทธิ์' }
+        '422':
+          description: |
+            ค่าอยู่นอกช่วง min/max ที่อนุญาต (`E_RETENTION_OUT_OF_RANGE`)
+            **ช่วงนี้กำหนดในโค้ด ผู้ดูแลแก้ไม่ได้**
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /admin/activation-codes:
+    post:
+      tags: [admin]
+      summary: ออก Activation Code + QR
+      description: |
+        `qr_payload` เป็น JWT ลงนามด้วย **ES256** (asymmetric)
+
+        ห้ามใช้ HS256 เพราะ shared secret จะต้องฝังอยู่ในแอป ซึ่งดึงออกมาได้
+        DB เก็บแค่ `sha256(jwt)` ไม่เก็บตัว token
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [driver_id]
+              properties:
+                driver_id:
+                  type: string
+                  format: uuid
+                  description: |
+                    **บังคับ** — code ทุกใบต้องผูกกับคนขับที่บันทึกไว้แล้ว ไม่มี code ลอย
+
+                    ถ้าคนขับรายนี้มีอุปกรณ์ใช้งานอยู่แล้ว **ต้องปฏิเสธตั้งแต่ตรงนี้** (กฎ 1:1)
+                    ให้เจ้าหน้าที่ลบเครื่องเก่าก่อนจึงออก code ใหม่ได้
+                note:
+                  type: string
+                  maxLength: 255
+                  description: บันทึกว่าออกให้ใคร (ปรากฏใน audit log)
+                expires_in_minutes:
+                  type: integer
+                  default: 15
+                  minimum: 5
+                  maximum: 1440
+      responses:
+        '201':
+          description: สร้างสำเร็จ — **`qr_payload` แสดงได้ครั้งเดียว ไม่มีทางดูซ้ำ**
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [code, qr_payload, expires_at]
+                properties:
+                  id: { type: string, format: uuid }
+                  code:
+                    type: string
+                    example: A7K2-9QX4
+                    description: รหัสอ่านออก ตัดอักษรกำกวม 0/O และ 1/I/l ออก
+                  qr_payload: { type: string, description: JWT ES256 }
+                  expires_at: { type: string, format: date-time }
+        '401': { description: ยังไม่ได้ล็อกอิน }
+        '409':
+          description: |
+            `E_DRIVER_HAS_ACTIVE_DEVICE` — คนขับรายนี้มีอุปกรณ์ใช้งานอยู่แล้ว
+            ต้องลบเครื่องเก่าก่อน (`/admin/devices/{id}/revoke`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+      x-rate-limit: 60 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่
+
+  /admin/devices/{deviceId}/revoke:
+    post:
+      tags: [admin]
+      summary: '"ลบอุปกรณ์" — เพิกถอนเมื่อเครื่องหาย/เปลี่ยนเครื่อง'
+      description: |
+        เจ้าหน้าที่รับแจ้งเครื่องหายแล้วกด "ลบอุปกรณ์" ในหน้าจอ
+
+        - `status = revoked` + `revoke_reason` + `deleted_at`
+        - ยกเลิกทุก `device_sessions` ทันที
+        - เขียน `audit_logs` (`device.revoked`) ใน transaction เดียวกัน
+
+        เครื่องเก่าถ้ากลับมาออนไลน์จะได้ `401 E_DEVICE_REVOKED` แล้วล้างข้อมูลในเครื่องทิ้ง
+        จากนั้นเจ้าหน้าที่ออก activation code ใหม่ผูกกับคนขับคนเดิม — **ไม่ต้องกรอกข้อมูลคนขับใหม่**
+
+        > **🔴 หลังบ้านคือ `revoke` + soft delete ไม่ใช่ hard delete**
+        > ต้องเก็บแถวไว้เพื่อรู้ย้อนหลังว่าเครื่องที่หายเป็นของคนขับคนไหน (สำคัญถ้าเกิดเหตุระหว่างที่เครื่องหาย)
+        > และเพื่อไม่ให้ `audit_logs` ที่อ้าง `device_id` กลายเป็นตัวชี้ลอย
+        > การลบข้อมูลจริงเป็นกระบวนการ PDPA แยกที่ต้องมีการอนุมัติ
+
+        ดู `docs/architecture.md` §6.6
+      security:
+        - adminSession: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  enum: [lost, stolen, replaced, resigned, other]
+                note: { type: string, maxLength: 255 }
+      responses:
+        '204': { description: เพิกถอนแล้ว — เขียน audit log ใน transaction เดียวกัน }
+        '401': { description: ยังไม่ได้ล็อกอิน }
+        '404': { description: ไม่พบอุปกรณ์ }
+
+  /admin/devices/{deviceId}/reset-pin:
+    post:
+      tags: [admin]
+      summary: เจ้าหน้าที่รีเซ็ต PIN ให้คนขับที่ลืม
+      description: |
+        คนขับติดต่อเจ้าหน้าที่และยืนยันตัวตนด้วยบัตรประชาชน แล้วเจ้าหน้าที่กดรีเซ็ตให้
+
+        - `status = pending_pin`, `pin_hash = null`, `pin_failed_count = 0`, `pin_locked_until = null`
+        - ยกเลิกทุก `device_sessions`
+        - ออก `pin_setup_token` ใหม่ (อายุ 10 นาที)
+        - เขียน `audit_logs` (`pin.reset`) ระบุว่าเจ้าหน้าที่คนไหนรีเซ็ตให้ใคร
+
+        **ไม่ต้องลงทะเบียนเครื่องใหม่** เพราะ device keypair ยังอยู่และยังใช้ได้ — รีเซ็ตแค่ PIN
+        ใช้ปลดเครื่องที่ `blocked` จาก PIN ผิดสะสม 10 ครั้งได้ด้วย
+
+        > **ข้อควรระวัง:** endpoint นี้คือ *ทางลัดที่ข้าม PIN ได้ทั้งหมด*
+        > ถ้าบัญชีเจ้าหน้าที่หลุดหรือมีเจ้าหน้าที่ทุจริต จะรีเซ็ต PIN เครื่องใครก็ได้
+        > → บังคับ 2FA กับบัญชีเจ้าหน้าที่ + แจ้งเตือนเมื่อเจ้าหน้าที่คนเดียวรีเซ็ตถี่ผิดปกติ
+
+        ดู `docs/architecture.md` §6.7
+      security:
+        - adminSession: []
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+      responses:
+        '200':
+          description: ออก token ใหม่แล้ว
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pin_setup_token: { type: string }
+                  expires_at: { type: string, format: date-time }
+        '401': { description: ยังไม่ได้ล็อกอิน }
+        '404': { description: ไม่พบอุปกรณ์ }
+      x-rate-limit: 20 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่ — เกินกว่านี้ให้แจ้งเตือน
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: access token อายุ 15 นาที
+    appSignature:
+      type: apiKey
+      in: header
+      name: X-App-Signature
+      description: |
+        **L1 — ชั้นที่อ่อน** SHA-256 fingerprint ของ signing cert (PRD §2.3)
+
+        ค่านี้เป็นค่าสาธารณะ ดึงจาก APK ที่เผยแพร่แล้วได้ด้วย `apksigner verify --print-certs`
+        จึงถือเป็น signal เท่านั้น **ห้ามใช้เป็นกลไก authentication**
+        ชั้นที่พิสูจน์ตัวตนจริงคือ `deviceSignature`
+    deviceSignature:
+      type: apiKey
+      in: header
+      name: X-Device-Signature
+      description: |
+        **L2 — ชั้นที่แข็ง** ECDSA P-256 เซ็นด้วย private key ที่สร้างใน
+        Android Keystore (StrongBox ถ้ามี) โดยตั้ง `export = false`
+        private key ออกจากเครื่องไม่ได้ จึงคัดลอกอุปกรณ์ไม่ได้
+    elevatedSession:
+      type: apiKey
+      in: cookie
+      name: elevation
+      description: |
+        **Step-up authentication** — ได้จาก `POST /admin/session/elevate` โดยใส่ PIN
+        อายุ 5 นาที ใช้กับ endpoint ที่แตะข้อมูลส่วนบุคคลหรือเปลี่ยนนโยบาย retention
+
+        เป็นชั้นที่ **เพิ่มจาก** `adminSession` ไม่ใช่แทนที่ และไม่ทดแทนการตรวจสิทธิ์
+        (`can_view_pii` / `can_download_documents` / role `admin`)
+    adminSession:
+      type: apiKey
+      in: cookie
+      name: session
+      description: |
+        session cookie ของ Staff Portal (มี CSRF token คู่กัน) — บังคับ TOTP 2FA
+        ใช้ได้เฉพาะกับ container `portal` (`staff.example`) ไม่ใช่ `api.example`
+
+  parameters:
+    DriverId:
+      name: driverId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    DeviceId:
+      name: deviceId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    XAppVersion:
+      name: X-App-Version
+      in: header
+      required: true
+      schema: { type: string, example: "1.0.0+42" }
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+    XTimestamp:
+      name: X-Timestamp
+      in: header
+      required: true
+      schema: { type: integer, format: int64 }
+      description: unix seconds — ยอมรับ skew ±60 วินาที นอกช่วงนี้ปฏิเสธ
+    XNonce:
+      name: X-Nonce
+      in: header
+      required: true
+      schema: { type: string, format: uuid }
+      description: เก็บใน Valkey TTL 5 นาที — ซ้ำเมื่อไหร่ปฏิเสธทันที
+
+  schemas:
+
+    ErrorCode:
+      type: string
+      enum:
+        - E_APP_SIGNATURE_INVALID
+        - E_INTEGRITY_FAILED
+        - E_DEVICE_SIGNATURE_INVALID
+        - E_TOKEN_EXPIRED
+        - E_DEVICE_REVOKED
+        - E_ACTIVATION_CODE_USED
+        - E_DRIVER_ALREADY_EXISTS
+        - E_DRIVER_HAS_ACTIVE_DEVICE
+        - E_PIN_LOCKED
+        - E_ELEVATION_REQUIRED
+        - E_RETENTION_OUT_OF_RANGE
+        - E_APP_UPDATE_REQUIRED
+        - E_RATE_LIMITED
+        - E_VALIDATION_FAILED
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: { $ref: '#/components/schemas/ErrorCode' }
+            message:
+              type: string
+              description: |
+                **ภาษาอังกฤษเสมอ — สำหรับ dev อ่าน ไม่ใช่ผู้ใช้**
+                แอปต้อง map จาก `code` เป็นข้อความไทยเอง ห้ามเอา `message` ไปแสดงตรงๆ
+            request_id: { type: string, format: uuid }
+            retry_after: { type: integer, description: วินาที (เฉพาะ 423 และ 429) }
+            details:
+              type: object
+              additionalProperties: true
+              description: รายละเอียด validation — **ห้ามใส่ข้อมูลลับ**
+
+    EnrollRequest:
+      type: object
+      required: [activation_token, public_key, device_uuid, device_info]
+      properties:
+        activation_token:
+          type: string
+          description: JWT ES256 ที่อ่านได้จาก QR
+        public_key:
+          type: string
+          description: |
+            EC P-256 public key รูปแบบ SPKI DER เข้ารหัส base64
+            **นี่คือตัวผูกอุปกรณ์ที่แท้จริง** ไม่ใช่ `device_uuid`
+        device_uuid:
+          type: string
+          description: |
+            `ANDROID_ID` (MVP รองรับ Android เท่านั้น)
+
+            **server เก็บเป็น HMAC-SHA256 เท่านั้น ไม่เก็บค่าดิบ** (ข้อมูลระบุตัวบุคคลตาม PDPA)
+
+            ค่านี้ไม่เสถียร — reset เมื่อ factory reset และผูกกับ signing key
+            จึงใช้เป็น **secondary signal** ดูการโคลน/ย้ายเครื่องเท่านั้น **ใช้ผูกอุปกรณ์ไม่ได้**
+        key_attestation:
+          type: object
+          additionalProperties: true
+          description: |
+            **Android Key Attestation certificate chain** — ของจริงที่ใช้ตรวจสภาพเครื่อง
+
+            TEE/StrongBox ของเครื่องเป็นคนเซ็น chain นี้ และสืบสาวถึง root certificate ของ Google
+            แอปแก้เนื้อหาไม่ได้เพราะไม่มีกุญแจของ TEE → **Frida hook ไม่ได้ Magisk ซ่อนไม่ได้**
+
+            server อ่านค่าเหล่านี้จาก chain แล้วตัดสิน
+            - `verifiedBootState` — เครื่อง root ส่วนใหญ่ต้องปลดล็อก bootloader → จะไม่ใช่ `Verified`
+            - `deviceLocked` — bootloader ล็อกอยู่หรือไม่
+            - `securityLevel` — `TrustedEnvironment` / `StrongBox` / `Software`
+            - `osPatchLevel` — ใช้ปฏิเสธเครื่องที่ไม่ได้อัปเดตนานเกินไป
+
+            **MVP: monitor mode** — บันทึก + แจ้งเตือน ยังไม่ปฏิเสธ
+            เมื่อสลับ flag เป็นบังคับแล้ว ไม่ผ่านเกณฑ์ → `403 E_INTEGRITY_FAILED`
+            ดู `docs/architecture.md` §4.2 (รวมข้อจำกัดที่ต้องรู้)
+        device_info:
+          type: object
+          required: [platform, model, os_version]
+          properties:
+            platform: { type: string, enum: [android, ios] }
+            model: { type: string, example: "SM-S928B" }
+            os_version: { type: string, example: "14" }
+        integrity:
+          $ref: '#/components/schemas/IntegritySignals'
+
+    DriverInput:
+      type: object
+      description: |
+        ข้อมูลคนขับรถ — **ใช้เฉพาะที่ `/admin/drivers` เท่านั้น**
+
+        คนขับไม่เคยส่งข้อมูลชุดนี้ผ่านแอป เจ้าหน้าที่เป็นคนกรอกหลังตรวจเอกสารกระดาษแล้ว
+
+        **ยืนยันแล้ว:** มี `employee_code` · ไม่มีทะเบียนรถ (รถเป็นของบริษัท จะผูกรถ↔คนขับในอนาคต ไม่ใช่ MVP)
+        · ไม่มีสังกัดผู้ประกอบการ
+      required: [full_name, employee_code, national_id, phone]
+      properties:
+        full_name: { type: string, maxLength: 255 }
+        employee_code:
+          type: string
+          maxLength: 50
+          description: '**รหัสพนักงานคนขับ** — unique ทั้งระบบ ซ้ำได้ → `409`'
+        national_id:
+          type: string
+          pattern: '^[0-9]{13}$'
+          description: |
+            เลขบัตรประชาชน 13 หลัก — ต้องตรวจ checksum ฝั่ง server ด้วย
+
+            **server เก็บเป็น `national_id_encrypted` (เข้ารหัส) + `national_id_hmac` (ไว้ค้นหา/กันซ้ำ)
+            ห้ามเก็บ plaintext และห้าม log** (PDPA)
+        phone: { type: string, maxLength: 20 }
+        license_number:
+          type: string
+          maxLength: 50
+          description: เลขใบขับขี่ (ไม่บังคับ)
+        license_expires_at: { type: string, format: date }
+
+    EnrollResponse:
+      type: object
+      required: [device_id, status, pin_setup_token, expires_at]
+      properties:
+        device_id: { type: string, format: uuid }
+        status:
+          type: string
+          enum: [pending_pin]
+          description: ตั้ง PIN ต่อได้เลย — ไม่มีสถานะรออนุมัติเพราะการอนุมัติเกิดบนกระดาษไปแล้ว
+        pin_setup_token:
+          type: string
+          description: อายุ 10 นาที ใช้ได้ครั้งเดียว สำหรับเรียก `/devices/{id}/pin`
+        expires_at:
+          type: string
+          format: date-time
+          description: วันหมดอายุของ `pin_setup_token`
+
+    UpdateManifest:
+      type: object
+      required: [payload, signature, key_id]
+      properties:
+        payload:
+          type: object
+          description: '**เนื้อหาที่ถูกลงนาม** — แอปต้องตรวจลายเซ็นก่อนเชื่อ field ใดๆ ในนี้'
+          required:
+            [package, latest_version, latest_version_code, min_supported_version_code,
+             apk_url, apk_sha256, signing_cert_sha256, sequence, expires_at]
+          properties:
+            package: { type: string, example: com.example.driver }
+            latest_version: { type: string, example: 1.4.2 }
+            latest_version_code:
+              type: integer
+              example: 142
+              description: '**ห้าม downgrade** — ถ้าน้อยกว่าหรือเท่ากับที่ติดตั้งอยู่ ให้เพิกเฉย'
+            min_supported_version_code:
+              type: integer
+              example: 130
+              description: |
+                ต่ำกว่าค่านี้ = บังคับอัปเดตก่อนใช้งาน
+                ต้องสอดคล้องกับ `MIN_SUPPORTED_APP_VERSION` ฝั่ง API ที่ตอบ `426 E_APP_UPDATE_REQUIRED`
+
+                **ห้ามยกระดับค่านี้ในวันเดียวกับที่ปล่อยเวอร์ชันใหม่** — คนขับจะใช้งานไม่ได้พร้อมกันกลางวันทำงาน
+            apk_url: { type: string, format: uri }
+            apk_sha256:
+              type: string
+              description: ตรวจหลังดาวน์โหลด **ก่อน**เรียกตัวติดตั้ง
+            apk_size: { type: integer }
+            signing_cert_sha256:
+              type: string
+              description: |
+                แอปตรวจว่า APK ที่ดาวน์โหลดมาเซ็นด้วย key เดียวกับตัวเอง
+                (Android บังคับตอนติดตั้งทับอยู่แล้ว แต่ตรวจเองจะได้ error ที่อธิบายได้
+                และกันการหลอกให้ผู้ใช้ถอนแอปเก่าก่อนติดตั้งของปลอม)
+            mandatory: { type: boolean }
+            release_notes_th: { type: string }
+            sequence:
+              type: integer
+              description: '**เพิ่มขึ้นทางเดียว** — แอปเก็บค่าล่าสุดที่เคยเห็นไว้ ปฏิเสธค่าที่เท่าหรือน้อยกว่า'
+            published_at: { type: string, format: date-time }
+            expires_at:
+              type: string
+              format: date-time
+              description: |
+                **กัน freeze attack** — หมดอายุแล้วแอปต้องไม่เชื่อ manifest นี้อีก
+                ต้องออก manifest ใหม่เป็นระยะแม้ไม่มีเวอร์ชันใหม่ (เสนอ 7 วัน)
+        signature:
+          type: string
+          description: 'base64 ของลายเซ็น ES256/Ed25519 บน canonical JSON ของ `payload`'
+        key_id:
+          type: string
+          example: release-2026-01
+          description: ระบุว่าลงนามด้วย key ตัวไหน เพื่อรองรับการหมุนกุญแจ
+
+    RetentionPolicy:
+      type: object
+      description: |
+        นโยบายเก็บข้อมูลที่ผู้ดูแลระบบตั้งค่าได้ผ่าน GUI
+
+        ช่วงที่อนุญาต (7–3650 วัน) **validate ในโค้ด ผู้ดูแลแก้ไม่ได้** — กันการพิมพ์ผิด
+        ที่จะทำให้ข้อมูลหายถาวร (ดู `docs/architecture.md` §10.2)
+      properties:
+        key: { type: string }
+        value_days: { type: integer }
+        updated_by: { type: string }
+        updated_at: { type: string, format: date-time }
+
+    TokenPair:
+      type: object
+      required: [access_token, refresh_token, expires_in]
+      properties:
+        access_token: { type: string }
+        refresh_token:
+          type: string
+          description: rotating — ตัวเดิมถูกยกเลิกทันทีที่ใช้
+        token_type: { type: string, enum: [Bearer] }
+        expires_in: { type: integer, example: 900, description: วินาที (access token) }
+        refresh_expires_in: { type: integer, example: 2592000 }
+
+    IntegritySignals:
+      type: object
+      description: |
+        ผลตรวจจากฝั่ง client ตาม PRD §2.2
+
+        **ทุก field ในนี้ปลอมได้** — Magisk Hide ซ่อน root, Frida hook ให้คืน `false`,
+        หรือแก้ APK ตัดโค้ดตรวจทิ้งไปเลย
+
+        เก็บไว้เป็นหลักฐานและใช้คิด risk score **ห้ามใช้ตัดสินใจเดี่ยว**
+        การตรวจสภาพเครื่องที่เชื่อได้จริงคือ `key_attestation` ซึ่ง TEE เป็นคนเซ็น (§4.2)
+      properties:
+        rooted: { type: boolean, description: root / jailbreak }
+        su_binary_found: { type: boolean }
+        test_keys: { type: boolean, description: build signed ด้วย test-keys }
+        developer_options: { type: boolean }
+        emulator: { type: boolean }
+        mock_location: { type: boolean }
+        debugger_attached: { type: boolean }
+        hook_framework_detected: { type: boolean, description: Frida / Xposed / Magisk }
+        play_integrity_token:
+          type: string
+          description: |
+            **❌ ไม่ใช้งาน — ตัดถาวร ไม่ใช่เลื่อน**
+
+            แอปไม่ขึ้น store ตามการตัดสินใจของเจ้าของงาน → **Play Integrity ใช้ไม่ได้ทางเทคนิค**
+            เพราะต้องมี Play Console จึงจะเรียกได้ (ADR 0003)
+
+            **สิ่งที่ใช้แทน:** `key_attestation` (Android Key Attestation) ซึ่งตรวจฝั่ง server ได้จริง
+            และไม่ต้องมี Play Console — ดู `docs/architecture.md` §4.2
+
+            คง field นี้ไว้เผื่อนโยบายเปลี่ยน แต่ **ห้ามสื่อสารว่า "จะทำใน Phase 2"**
+
+  responses:
+    BadRequest:
+      description: request ไม่ถูกต้อง
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UnauthorizedDevice:
+      description: ลายเซ็นอุปกรณ์ไม่ผ่าน / nonce ซ้ำ / เวลาเพี้ยน / token หมดอายุ / อุปกรณ์ถูกเพิกถอน
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ForbiddenIntegrity:
+      description: |
+        `E_APP_SIGNATURE_INVALID` หรือ `E_INTEGRITY_FAILED`
+
+        กรณี `E_APP_SIGNATURE_INVALID` ระวังตอนหมุน signing key —
+        `APP_SIGNATURE_SHA256_ALLOWLIST` ต้องรับหลายค่าพร้อมกัน ไม่งั้นผู้ใช้เดิมทั้งหมดโดน 403
+        พร้อมกันในวันปล่อยแอป (ดู `docs/architecture.md` §6.8)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    UpdateRequired:
+      description: เวอร์ชันแอปต่ำกว่า `MIN_SUPPORTED_APP_VERSION`
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: เกิน throttle — ดู header `Retry-After`
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
+security:
+  - bearerAuth: []
+    appSignature: []
+    deviceSignature: []
