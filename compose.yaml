@@ -40,6 +40,24 @@ x-php-env: &php-env
   # MVP รัน attestation แบบ monitor mode — สลับเป็นบังคับด้วย flag นี้ (§4.2)
   KEY_ATTESTATION_ENFORCE: ${KEY_ATTESTATION_ENFORCE:-false}
 
+# 🔴 api กับ portal ลงทะเบียน route และ provider คนละชุดตาม APP_ROLE
+#    แต่ dev แชร์ bootstrap/cache ผ่าน bind mount เดียวกัน
+#    ถ้าใช้ path เดียวกัน cache ของ role หนึ่งจะทับอีก role → route หายทั้งฝั่ง
+#    (เจอจริงตอนทดสอบ: make cache แล้ว /api/v1/health กลายเป็น 404)
+x-cache-api: &cache-api
+  APP_CONFIG_CACHE:   /var/www/html/bootstrap/cache/api/config.php
+  APP_ROUTES_CACHE:   /var/www/html/bootstrap/cache/api/routes-v7.php
+  APP_EVENTS_CACHE:   /var/www/html/bootstrap/cache/api/events.php
+  APP_SERVICES_CACHE: /var/www/html/bootstrap/cache/api/services.php
+  APP_PACKAGES_CACHE: /var/www/html/bootstrap/cache/api/packages.php
+
+x-cache-portal: &cache-portal
+  APP_CONFIG_CACHE:   /var/www/html/bootstrap/cache/portal/config.php
+  APP_ROUTES_CACHE:   /var/www/html/bootstrap/cache/portal/routes-v7.php
+  APP_EVENTS_CACHE:   /var/www/html/bootstrap/cache/portal/events.php
+  APP_SERVICES_CACHE: /var/www/html/bootstrap/cache/portal/services.php
+  APP_PACKAGES_CACHE: /var/www/html/bootstrap/cache/portal/packages.php
+
 # secret ที่ "แตะข้อมูลส่วนบุคคล" — ให้เฉพาะ portal / worker
 x-pii-env: &pii-env
   DOCUMENT_KEK: ${DOCUMENT_KEK:?required}
@@ -81,7 +99,7 @@ services:
   api:
     <<: *php-build
     environment:
-      <<: *php-env
+      <<: [*php-env, *cache-api]
       APP_ROLE: api
       APP_URL: http://localhost:${API_PORT:-8080}
     volumes:
@@ -96,7 +114,7 @@ services:
   portal:
     <<: *php-build
     environment:
-      <<: [*php-env, *pii-env, *garage-env]
+      <<: [*php-env, *pii-env, *garage-env, *cache-portal]
       APP_ROLE: portal
       APP_URL: http://localhost:${STAFF_PORT:-8081}
     volumes:
@@ -114,7 +132,7 @@ services:
     command: ["php", "artisan", "queue:work", "--tries=3", "--max-time=3600"]
     user: www-data
     environment:
-      <<: [*php-env, *pii-env, *garage-env]
+      <<: [*php-env, *pii-env, *garage-env, *cache-portal]
       APP_ROLE: worker
     volumes:
       - ./apps/api:/var/www/html
@@ -130,7 +148,7 @@ services:
     command: ["php", "artisan", "schedule:work"]
     user: www-data
     environment:
-      <<: [*php-env, *garage-env]
+      <<: [*php-env, *garage-env, *cache-portal]
       APP_ROLE: scheduler
     volumes:
       - ./apps/api:/var/www/html

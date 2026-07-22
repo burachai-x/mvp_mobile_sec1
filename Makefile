@@ -11,7 +11,8 @@ export GID := $(shell id -g)
 #    `docker exec` เข้าเป็น root แต่ php-fpm worker เป็น www-data และไม่มี CAP_FOWNER
 #    ไฟล์ที่ root สร้างไว้ worker จะ touch() ไม่ได้ → 500 touch(): Utime failed
 #    ทุก target ด้านล่างห่อ -u www-data ไว้แล้ว เพื่อไม่ให้ใครต้องจำ (CLAUDE.md §5)
-ARTISAN := $(DC) exec -u www-data portal php artisan
+ARTISAN     := $(DC) exec -u www-data portal php artisan
+ARTISAN_API := $(DC) exec -u www-data api php artisan
 COMPOSER := $(DC) exec -u www-data portal composer
 
 .PHONY: help
@@ -101,14 +102,19 @@ migrate-status: ## ดูสถานะ migration
 	$(ARTISAN) migrate:status
 
 .PHONY: cache
-cache: ## config/route/view cache — ต้องเป็น www-data ไม่งั้นเว็บ 500
+cache: ## config/route/view cache — ต้องแคชแยกทั้ง 2 role ไม่งั้น route ทับกัน
+	@echo "-- portal --"
 	$(ARTISAN) config:cache
 	$(ARTISAN) route:cache
 	$(ARTISAN) view:cache
+	@echo "-- api (route/provider คนละชุด จึงต้องแคชแยก) --"
+	$(ARTISAN_API) config:cache
+	$(ARTISAN_API) route:cache
 
 .PHONY: cache-clear
-cache-clear: ## ล้าง cache ทั้งหมด
+cache-clear: ## ล้าง cache ทั้งหมด (ทั้ง 2 role)
 	$(ARTISAN) optimize:clear
+	$(ARTISAN_API) optimize:clear
 
 .PHONY: key
 key: ## สร้าง APP_KEY ใหม่
@@ -151,18 +157,8 @@ secrets-scan: ## หา secret ที่หลุดเข้า git
 	gitleaks detect --source . --config .gitleaks.toml --redact -v
 
 .PHONY: verify-isolation
-verify-isolation: ## 🔴 ยืนยันว่า api ไม่มี KEK และต่อ Garage ไม่ได้ (ADR 0007, S18)
-	@echo "== api ต้องไม่มี DOCUMENT_KEK =="
-	@if $(DC) exec -T api printenv DOCUMENT_KEK >/dev/null 2>&1; then \
-		echo "  ❌ พบ DOCUMENT_KEK ใน container api — การแยกพังแล้ว"; exit 1; \
-	else echo "  ✅ ไม่มี"; fi
-	@echo "== api ต้องต่อ garage ไม่ได้ =="
-	@if $(DC) exec -T api sh -c 'nc -z -w2 garage 3900' >/dev/null 2>&1; then \
-		echo "  ❌ api ต่อ garage ได้ — ตรวจ network ใน compose.yaml"; exit 1; \
-	else echo "  ✅ ต่อไม่ได้"; fi
-	@echo "== portal ต้องมี DOCUMENT_KEK =="
-	@$(DC) exec -T portal printenv DOCUMENT_KEK >/dev/null 2>&1 \
-		&& echo "  ✅ มี" || { echo "  ❌ portal ไม่มี KEK"; exit 1; }
+verify-isolation: ## 🔴 ยืนยันการแยก api/portal ครบทุกชั้น (ADR 0007, S18)
+	@bash scripts/verify-isolation.sh
 
 # ── ฐานข้อมูล / storage ──────────────────────────────────────
 .PHONY: psql
