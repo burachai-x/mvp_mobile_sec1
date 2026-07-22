@@ -1020,6 +1020,15 @@ prod    base + vendor + source, opcache preload   (USER www-data)
 `docker exec` เข้าไปเป็น **root** โดยดีฟอลต์ แต่ php-fpm worker รันเป็น **www-data** และไม่มี `CAP_FOWNER`
 ไฟล์ที่ root สร้างไว้ใน `storage/` worker จะ `touch()` ไม่ได้ → `500 touch(): Utime failed`
 
+**ผลการทดสอบจริงบนโปรเจกต์นี้ (2026-07-23):**
+- `touch` ไฟล์ของ root ในฐานะ www-data → **`Permission denied` ยืนยันแล้ว**
+- แต่ `php artisan view:cache` / `config:cache` ในฐานะ www-data ทับไฟล์ของ root → **สำเร็จ**
+  เพราะ Laravel ตั้ง `storage/framework/*` และ `bootstrap/cache` เป็น `0777`
+  www-data จึง unlink ไฟล์ของ root แล้วสร้างใหม่ได้
+
+→ อาการจะโผล่เมื่อ perm แคบกว่านั้น (production มักเป็น `0775`) หรือเมื่อโค้ดเรียก `touch()`
+บนไฟล์เดิมโดยตรง **ownership ที่ปนกันจึงเป็นความเสี่ยงแฝง ไม่ใช่ปัญหาที่หายไปเอง**
+
 ```bash
 docker compose exec -u www-data php php artisan config:cache   # ✅
 docker compose exec php php artisan config:cache               # ❌

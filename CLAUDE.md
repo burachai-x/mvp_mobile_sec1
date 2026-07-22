@@ -39,8 +39,8 @@ backend รันบน Docker ทั้งหมด
 ผลคือ **Play Integrity ใช้ไม่ได้ทางเทคนิค** ชั้นป้องกันจริงที่เหลือคือ
 **device keypair** + **Android Key Attestation** (ตรวจ `verifiedBootState` ฝั่ง server)
 
-**สถานะ repo:** ตอนนี้มีแค่เอกสาร ยังไม่มีโค้ด / `compose.yaml` / `Makefile` และยังไม่ได้ `git init`
-ขั้นถัดไปตามลำดับ: `git init` → Docker skeleton → Laravel app → Flutter app
+**สถานะ repo:** เอกสารครบ · Docker stack รันได้ · Laravel 13 ติดตั้งแล้วใน `apps/api/`
+ขั้นถัดไป: migration + model → Filament resources → API endpoints → Flutter app
 
 ---
 
@@ -249,7 +249,15 @@ chore(deps): bump laravel/framework to 13.2.0
 ### 🔴 กฎเหล็ก: artisan ที่เขียนลง `storage/` ต้องใช้ `-u www-data`
 
 `docker exec` เข้าไปเป็น **root** โดยดีฟอลต์ แต่ php-fpm worker รันเป็น **www-data** และไม่มี `CAP_FOWNER`
-→ ไฟล์ที่ root สร้างไว้ใน `storage/` worker จะ `touch()` ไม่ได้ → เว็บพังเป็น `500 touch(): Utime failed`
+→ ไฟล์ที่ root สร้างไว้ใน `storage/` worker จะ **`touch()` ไม่ได้** (`Permission denied`)
+→ เว็บพังเป็น `500 touch(): Utime failed`
+
+**อาการจะโผล่หรือไม่ ขึ้นกับ permission ของไดเรกทอรี** — ทดสอบบนโปรเจกต์นี้แล้วพบว่า
+`storage/framework/views` ที่ Laravel ตั้งเป็น `0777` ทำให้ `view:cache` เป็น www-data
+*ลบไฟล์ของ root แล้วสร้างใหม่ได้* จึงดูเหมือนไม่มีปัญหา
+แต่บน production ที่ perm แคบกว่า (`0775`) หรือกับโค้ดที่เรียก `touch()` บนไฟล์เดิมตรงๆ **จะพัง**
+
+→ **ownership ปนกันคือระเบิดเวลา** ไม่ใช่เรื่องที่ "ลองแล้วไม่เห็นพัง" แล้วจะข้ามได้
 
 ```bash
 docker compose exec -u www-data php php artisan config:cache   # ✅
