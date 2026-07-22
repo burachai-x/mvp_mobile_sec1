@@ -1,0 +1,62 @@
+# gitleaks config — รันทั้ง pre-commit hook และ CI (CLAUDE.md §3)
+title = "mvp_mobile_sec1"
+
+[extend]
+useDefault = true
+
+# --- rule เฉพาะของโปรเจกต์นี้ ---
+
+[[rules]]
+id = "document-kek"
+description = "DOCUMENT_KEK — กุญแจถอดสำเนาบัตรประชาชนทั้งฐาน (architecture.md §13)"
+regex = '''(?i)DOCUMENT_KEK\s*[=:]\s*['"]?[A-Za-z0-9+/=]{32,}'''
+tags = ["key", "critical"]
+
+[[rules]]
+id = "national-id-encryption-key"
+description = "NATIONAL_ID_ENCRYPTION_KEY"
+regex = '''(?i)NATIONAL_ID_ENCRYPTION_KEY\s*[=:]\s*['"]?[A-Za-z0-9+/=]{32,}'''
+tags = ["key", "critical"]
+
+[[rules]]
+id = "device-uuid-pepper"
+description = "DEVICE_UUID_PEPPER — เปลี่ยนไม่ได้หลัง production"
+regex = '''(?i)DEVICE_UUID_PEPPER\s*[=:]\s*['"]?[A-Za-z0-9+/=]{16,}'''
+tags = ["key"]
+
+[[rules]]
+id = "manifest-signing-key"
+description = "MANIFEST_SIGNING_KEY — เซ็น manifest ปลอมได้ = ส่งมัลแวร์ลงทุกเครื่อง (ADR 0006)"
+regex = '''(?i)MANIFEST_SIGNING_KEY\s*[=:]\s*['"]?\S{16,}'''
+tags = ["key", "critical"]
+
+[[rules]]
+id = "garage-credentials"
+description = "Garage S3 access/secret key"
+regex = '''(?i)GARAGE_(ACCESS|SECRET)_KEY\s*[=:]\s*['"]?[A-Za-z0-9+/=]{16,}'''
+tags = ["key"]
+
+[[rules]]
+id = "garage-rpc-secret"
+description = "Garage rpc_secret ใน garage.toml"
+regex = '''(?i)rpc_secret\s*=\s*['"][0-9a-f]{64}['"]'''
+tags = ["key"]
+
+[[rules]]
+id = "thai-national-id"
+description = "เลขบัตรประชาชนไทย 13 หลัก — ห้ามอยู่ใน seeder/fixture/test (CLAUDE.md §8)"
+regex = '''(?i)(national_id|citizen_id|เลขบัตร)\D{0,10}\b[0-9]{13}\b'''
+tags = ["pii", "pdpa"]
+
+[allowlist]
+description = "ค่าตัวอย่างที่อนุญาต"
+paths = [
+  '''\.gitleaks\.toml$''',
+  '''\.env\.example$''',
+  '''^docs/''',
+]
+regexes = [
+  '''CHANGE_ME''',
+  '''replace-with-''',
+  '''0{16,}''',
+]

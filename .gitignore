@@ -1,0 +1,60 @@
+# === Secrets — ห้าม commit เด็ดขาด (CLAUDE.md §3, §6) ===
+.env
+.env.*
+!.env.example
+secrets/
+*.jks
+*.keystore
+*.p8
+*.p12
+*.pfx
+*.key
+*.pem
+!*.pub.pem
+
+# === Dependencies ===
+/apps/api/vendor/
+/apps/api/node_modules/
+node_modules/
+
+# === Laravel runtime ===
+/apps/api/storage/*.key
+/apps/api/storage/framework/cache/*
+/apps/api/storage/framework/sessions/*
+/apps/api/storage/framework/testing/*
+/apps/api/storage/framework/views/*
+/apps/api/storage/logs/*
+/apps/api/bootstrap/cache/*
+/apps/api/public/build/
+/apps/api/public/hot
+/apps/api/public/storage
+!.gitkeep
+
+# === Docker volume data (bind-mounted ตอน dev) ===
+/.data/
+
+# === Flutter ===
+/apps/mobile/build/
+/apps/mobile/.dart_tool/
+/apps/mobile/.flutter-plugins
+/apps/mobile/.flutter-plugins-dependencies
+/apps/mobile/android/key.properties
+/apps/mobile/android/local.properties
+/apps/mobile/ios/Pods/
+*.apk
+*.aab
+
+# === Database dumps ===
+*.sql
+*.sqlite
+*.sqlite3
+*.dump
+
+# === Editor / OS ===
+.idea/
+.vscode/
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+*.swp
+*~

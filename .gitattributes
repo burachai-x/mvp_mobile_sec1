@@ -1,0 +1,25 @@
+# บังคับ LF ทุกไฟล์ข้อความ — ไม่งั้น shell script ใน container พังบน Windows
+* text=auto eol=lf
+
+*.sh        text eol=lf
+Makefile    text eol=lf
+Dockerfile  text eol=lf
+*.php       text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.md        text eol=lf
+*.toml      text eol=lf
+*.conf      text eol=lf
+
+# ไฟล์ไบนารี — ห้าม normalize
+*.png       binary
+*.jpg       binary
+*.pdf       binary
+*.jks       binary
+*.keystore  binary
+*.apk       binary
+*.aab       binary
+
+# ไม่ต้องนับเป็น diff ตอน review
+apps/api/composer.lock  linguist-generated=true -diff
+apps/mobile/pubspec.lock linguist-generated=true -diff

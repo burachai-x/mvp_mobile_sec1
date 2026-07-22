@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# ติดตั้ง: git config core.hooksPath .githooks
+set -euo pipefail
+
+fail=0
+
+# 1) ไฟล์ที่ห้าม commit เด็ดขาด (CLAUDE.md §3)
+blocked=$(git diff --cached --name-only --diff-filter=A \
+  | grep -E '(^|/)(\.env$|\.env\.[^e]|secrets/)|\.(jks|keystore|p8|p12|pfx|key)$' || true)
+if [ -n "$blocked" ]; then
+  echo "❌ ไฟล์ต้องห้ามอยู่ใน staged:"
+  echo "$blocked" | sed 's/^/   /'
+  fail=1
+fi
+
+# 2) secret scan
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --config .gitleaks.toml --redact --no-banner || fail=1
+else
+  echo "⚠️  ยังไม่ได้ติดตั้ง gitleaks — ข้าม secret scan"
+fi
+
+# 3) openapi.yaml ต้อง parse ได้ ถ้าถูกแก้
+if git diff --cached --name-only | grep -q '^docs/api/openapi.yaml$'; then
+  python3 -c "import yaml,sys; yaml.safe_load(open('docs/api/openapi.yaml'))" \
+    || { echo "❌ openapi.yaml parse ไม่ผ่าน"; fail=1; }
+fi
+
+exit $fail
