@@ -36,6 +36,9 @@ class StaffPanelProvider extends PanelProvider
             // and the API contract in docs/api/openapi.yaml
             ->path('staff')
             ->login()
+            // Staff are their own guard: a session on the default `web` guard
+            // must never grant access to the portal.
+            ->authGuard('staff')
             ->colors([
                 'primary' => Color::Amber,
             ])

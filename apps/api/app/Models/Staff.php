@@ -27,6 +27,16 @@ class Staff extends Authenticatable implements FilamentUser
     }
 
     /**
+     * Needed in addition to getAuthPassword(): EloquentUserProvider's automatic
+     * rehash writes to the column this returns. Left at the default it would
+     * try to update a `password` column that does not exist.
+     */
+    public function getAuthPasswordName(): string
+    {
+        return 'password_hash';
+    }
+
+    /**
      * Disabled accounts keep their rows so audit_logs.actor_id stays resolvable,
      * but must not be able to sign in.
      */

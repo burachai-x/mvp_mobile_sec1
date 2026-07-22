@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Staff;
 use App\Models\User;
 
 return [
@@ -42,6 +43,13 @@ return [
             'driver' => 'session',
             'provider' => 'users',
         ],
+
+        // Staff Portal (Filament panel at /staff). Kept separate from `web` so a
+        // session on one never authenticates the other.
+        'staff' => [
+            'driver' => 'session',
+            'provider' => 'staff',
+        ],
     ],
 
     /*
@@ -71,6 +79,13 @@ return [
         //     'driver' => 'database',
         //     'table' => 'users',
         // ],
+
+        // The staff table stores its hash in `password_hash`; App\Models\Staff
+        // reports that through getAuthPasswordName().
+        'staff' => [
+            'driver' => 'eloquent',
+            'model' => Staff::class,
+        ],
     ],
 
     /*
