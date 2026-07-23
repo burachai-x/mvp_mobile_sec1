@@ -163,12 +163,20 @@ class _EnrollScreenState extends State<EnrollScreen> {
   Future<String?> _unlockWithPin(String pin) async {
     try {
       final tokens = await _api.verifyPin(deviceId: _state!.deviceId!, pin: pin);
+      final refreshToken = tokens['refresh_token'] as String;
 
-      // Sealing here rather than at setup: this is the moment a driver has just
-      // proven they know the PIN, which is what the fingerprint stands in for.
-      await _lock!.resealAfterRefresh(tokens['refresh_token'] as String);
+      // Reseals when fingerprint unlock is already on, since the token just
+      // rotated and the sealed copy is spent.
+      await _lock!.resealAfterRefresh(refreshToken);
 
-      setState(() => _step = _Step.active);
+      setState(() {
+        // Held so the offer to enable fingerprint unlock can appear. Every PIN
+        // unlock is a chance to turn it on, not only the first one at
+        // enrollment — without this the offer never reaches a driver who
+        // enrolled before the feature existed, or who declined it once.
+        _pendingRefreshToken = refreshToken;
+        _step = _Step.active;
+      });
 
       return null;
     } on ApiException catch (e) {
@@ -197,17 +205,27 @@ class _EnrollScreenState extends State<EnrollScreen> {
 
       return null;
     } on BiometricFailure catch (e) {
-      if (e.outcome == BiometricOutcome.invalidated) {
-        setState(() => _biometricUsable = false);
+      // AppLock has already retired the sealed token in these cases, so the
+      // button has to go with it or it would offer something that cannot work.
+      const retired = [
+        BiometricOutcome.invalidated,
+        BiometricOutcome.unusable,
+        BiometricOutcome.noneEnrolled,
+      ];
 
-        return 'A fingerprint was added or removed, so unlock is disabled. Use your PIN.';
+      if (retired.contains(e.outcome)) {
+        setState(() => _biometricUsable = false);
       }
 
       return switch (e.outcome) {
         BiometricOutcome.cancelled => null,
-        BiometricOutcome.lockout => 'Too many attempts. Use your PIN.',
-        BiometricOutcome.noneEnrolled => 'No fingerprint is set up on this phone.',
-        _ => 'Fingerprint unlock failed. Use your PIN.',
+        BiometricOutcome.lockout => 'Too many attempts. Enter your PIN instead.',
+        BiometricOutcome.invalidated =>
+          'A fingerprint was added or removed on this phone, so unlock was turned off. '
+              'Enter your PIN, then set it up again.',
+        BiometricOutcome.unusable || BiometricOutcome.noneEnrolled =>
+          'Fingerprint unlock needs setting up again. Enter your PIN, then turn it on.',
+        BiometricOutcome.failed => 'Fingerprint not recognised. Try again or enter your PIN.',
       };
     } on ApiException catch (e) {
       // A refused token means the session is gone, not that the finger was
@@ -300,13 +318,23 @@ class _EnrollScreenState extends State<EnrollScreen> {
   /// The server sends English developer text and expects the app to branch on
   /// the code, so nothing here shows `message` to a driver directly.
   String _explain(ApiException e) => switch (e.code) {
+        // Never tells a driver to enroll again over a typo — that means a trip
+        // back to staff for a new activation code.
+        'E_PIN_INVALID' => switch (e.details['attempts_remaining']) {
+            final int left when left > 0 => 'PIN ไม่ถูกต้อง เหลืออีก $left ครั้ง',
+            _ => 'PIN ไม่ถูกต้อง',
+          },
         'E_ACTIVATION_CODE_USED' =>
           'This code has already been used or has expired. Ask staff for a new one.',
         'E_DRIVER_HAS_ACTIVE_DEVICE' =>
           'This driver already has a device. Staff must remove the old one first.',
         'E_INTEGRITY_FAILED' => 'This device did not pass the security check.',
-        'E_DEVICE_SIGNATURE_INVALID' => 'The device signature was rejected. Enroll again.',
-        'E_PIN_LOCKED' => 'Too many wrong attempts. Try again later.',
+        'E_DEVICE_SIGNATURE_INVALID' => 'เครื่องนี้ยืนยันตัวตนไม่ผ่าน ต้องลงทะเบียนใหม่',
+        'E_PIN_LOCKED' => switch (e.details['retry_after']) {
+            final int seconds when seconds > 0 =>
+              'ใส่ PIN ผิดหลายครั้ง ลองใหม่ในอีก ${(seconds / 60).ceil()} นาที',
+            _ => 'ใส่ PIN ผิดหลายครั้ง ติดต่อเจ้าหน้าที่',
+          },
         'E_RATE_LIMITED' => 'Too many attempts. Wait a moment and try again.',
         _ => '${e.code} — ${e.message}',
       };

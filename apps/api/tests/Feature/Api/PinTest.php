@@ -214,25 +214,47 @@ final class PinTest extends ApiTestCase
     }
 
     /**
-     * openapi.yaml requires these two to be identical: if a wrong PIN looked
-     * different from a signature failure, an attacker holding a stolen phone
-     * could tell when they were guessing against a real device.
+     * A wrong PIN says so, and says how many tries are left.
+     *
+     * These two answers used to be identical, so that someone with a stolen
+     * phone could not tell which half they had failed. That hid nothing:
+     * reaching this endpoint requires a signature from a key inside the device
+     * TEE, so the only party who can see the difference is the enrolled device,
+     * which already knows its own signature is good. Guessing is bounded by the
+     * lockout below, not by the shape of this response.
+     *
+     * The cost was real — §7 has the app clear its session and re-enroll on
+     * E_DEVICE_SIGNATURE_INVALID, so one mistyped digit sent a driver back to
+     * staff for a new activation code.
      */
-    public function test_a_wrong_pin_and_an_invalid_signature_look_the_same(): void
+    public function test_a_wrong_pin_is_reported_as_a_wrong_pin(): void
     {
         $deviceId = $this->activeDevice(self::GOOD_PIN);
 
-        $wrongPin = $this->wrongPin($deviceId);
+        $this->wrongPin($deviceId)
+            ->assertStatus(401)
+            ->assertJsonPath('error.code', 'E_PIN_INVALID')
+            ->assertJsonPath('error.attempts_remaining', 4);
 
-        $badSignature = $this->signedPost(
+        $this->signedPost(
             '/api/v1/auth/pin/verify',
             ['device_id' => $deviceId, 'pin' => self::GOOD_PIN],
             headers: ['X-Device-Signature' => base64_encode('not-a-signature')],
-        );
+        )
+            ->assertStatus(401)
+            ->assertJsonPath('error.code', 'E_DEVICE_SIGNATURE_INVALID');
+    }
 
-        $this->assertSame(401, $wrongPin->status());
-        $this->assertSame($wrongPin->status(), $badSignature->status());
-        $this->assertSame($wrongPin->json(), $badSignature->json());
+    /** The count has to be useful, or it is just noise next to the error. */
+    public function test_attempts_remaining_counts_down_to_the_lockout(): void
+    {
+        $deviceId = $this->activeDevice(self::GOOD_PIN);
+
+        foreach ([4, 3, 2, 1] as $remaining) {
+            $this->wrongPin($deviceId)->assertJsonPath('error.attempts_remaining', $remaining);
+        }
+
+        $this->wrongPin($deviceId)->assertJsonPath('error.code', 'E_PIN_LOCKED');
     }
 
     /**

@@ -51,6 +51,9 @@
 - `.gitleaks.toml` พร้อม rule เฉพาะโปรเจกต์ (KEK, pepper, manifest key, เลขบัตร 13 หลัก)
 
 ### Changed
+- **PIN ผิดตอบ `E_PIN_INVALID` พร้อม `attempts_remaining`** — เดิมตอบ `E_DEVICE_SIGNATURE_INVALID`
+  เหมือนลายเซ็นผิด ซึ่งตาม §7 แปลว่าแอปต้องสั่ง enroll ใหม่ คนขับพิมพ์ผิดหลักเดียว
+  จึงต้องกลับไปขอ activation code จากเจ้าหน้าที่ (เจอตอนทดสอบบนเครื่องจริง)
 - รูปแบบ manifest: `payload` เป็น base64 ของไบต์ที่ถูกเซ็นจริง แทน "canonical JSON"
   เพื่อตัดปัญหาฝั่งเซ็นกับฝั่งตรวจ serialize ไม่ตรงกัน (`docs/architecture.md` §11.3)
 - อายุ activation code ดีฟอลต์ 7 วัน → **15 นาที** ให้ตรงกับที่ `docs/architecture.md` §6.2 ระบุไว้

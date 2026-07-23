@@ -8,11 +8,12 @@ import 'certificate_pins.dart';
 import 'device_key.dart';
 
 class ApiException implements Exception {
-  ApiException(this.status, this.code, this.message);
+  ApiException(this.status, this.code, this.message, [this.details = const {}]);
 
   final int status;
   final String code;
   final String message;
+  final Map<String, dynamic> details;
 
   @override
   String toString() => '$code ($status): $message';
@@ -158,6 +159,9 @@ class ApiClient {
           response.statusCode,
           error?['code'] as String? ?? 'E_UNKNOWN',
           error?['message'] as String? ?? text,
+          // Extra fields the app acts on, such as attempts_remaining on a
+          // wrong PIN and retry_after on a lockout.
+          error ?? const {},
         );
       }
 

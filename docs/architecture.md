@@ -614,6 +614,7 @@ X-App-Signature, X-App-Version
 | 403 | `E_APP_SIGNATURE_INVALID` | L1 ไม่ผ่าน (PRD §2.3) | แจ้งว่าแอปไม่ถูกต้อง ปิดแอป |
 | 403 | `E_INTEGRITY_FAILED` | root/emulator/attestation ไม่ผ่าน | แสดงหน้าเตือนความปลอดภัย ปิดแอป |
 | 401 | `E_DEVICE_SIGNATURE_INVALID` | ลายเซ็น request ไม่ตรง / nonce ซ้ำ / เวลาเพี้ยน | ล้าง session ให้ผู้ใช้ enroll ใหม่ |
+| 401 | `E_PIN_INVALID` | PIN ผิด (มี `attempts_remaining`) | ให้ลองใหม่ **ห้ามสั่ง enroll ใหม่** |
 | 401 | `E_TOKEN_EXPIRED` | access token หมดอายุ | เรียก refresh |
 | 401 | `E_DEVICE_REVOKED` | เจ้าหน้าที่ลบ/เพิกถอนเครื่อง | ล้างข้อมูลในเครื่อง |
 | 409 | `E_ACTIVATION_CODE_USED` | code ถูกใช้แล้ว / หมดอายุ / ถูกเพิกถอน | ขอ code ใหม่จากเจ้าหน้าที่ |
@@ -623,6 +624,15 @@ X-App-Signature, X-App-Version
 | 429 | `E_RATE_LIMITED` | เกิน throttle | หน่วงตาม `Retry-After` |
 
 `message` เป็นภาษาอังกฤษเสมอ (สำหรับ dev) — แอป map จาก `code` เป็นข้อความไทยเอง
+
+> **แก้จากรุ่นก่อน:** เดิม PIN ผิดตอบ `E_DEVICE_SIGNATURE_INVALID` เพื่อไม่ให้แยกออกจากลายเซ็นผิด
+>
+> การปิดบังนั้นไม่ได้กันใคร — คนที่ยิง endpoint นี้ได้ต้องเซ็นด้วย private key ที่อยู่ใน TEE
+> ซึ่งดึงออกไม่ได้ คนเดียวที่เห็นความต่างจึงเป็นตัวเครื่องที่ลงทะเบียนแล้ว ซึ่งรู้อยู่แล้วว่า
+> ลายเซ็นตัวเองถูก
+>
+> แต่ราคาที่จ่ายเป็นของจริง: ตารางนี้สั่งให้แอป enroll ใหม่เมื่อเจอ `E_DEVICE_SIGNATURE_INVALID`
+> ผลคือคนขับพิมพ์ PIN ผิดหนึ่งหลักต้องกลับไปขอ activation code จากเจ้าหน้าที่ (เจอตอนทดสอบจริง)
 
 ---
 

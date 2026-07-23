@@ -2,12 +2,31 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Why a biometric attempt did not produce the secret.
-enum BiometricOutcome { cancelled, lockout, noneEnrolled, invalidated, failed }
+enum BiometricOutcome {
+  cancelled,
+  lockout,
+  noneEnrolled,
+
+  /// A fingerprint was added or removed, destroying the key on purpose.
+  invalidated,
+
+  /// The sealed value can never be opened again — no key, or one left by an
+  /// older build. Separate from [failed], which is worth retrying.
+  unusable,
+
+  failed,
+}
 
 class BiometricFailure implements Exception {
   BiometricFailure(this.outcome);
 
   final BiometricOutcome outcome;
+
+  /// Named, because the default rendering of an exception is
+  /// "Instance of 'BiometricFailure'", which is what a driver saw on screen the
+  /// first time one escaped.
+  @override
+  String toString() => 'Fingerprint unlock failed: ${outcome.name}';
 }
 
 /// Whether the device can gate a key behind a fingerprint.
@@ -85,10 +104,12 @@ class AppLock {
     try {
       return await _invoke('biometricUnlock', {'sealed': sealed});
     } on BiometricFailure catch (e) {
-      // The key is gone for good, so the stored ciphertext is dead weight and
-      // keeping it would offer the driver a fingerprint option that can never
-      // work again.
-      if (e.outcome == BiometricOutcome.invalidated) {
+      // Whenever the sealed value can no longer be opened, retire it. Keeping
+      // it leaves a fingerprint button that fails every time, for good, with
+      // nothing telling the driver to set it up again.
+      if (e.outcome == BiometricOutcome.invalidated ||
+          e.outcome == BiometricOutcome.unusable ||
+          e.outcome == BiometricOutcome.noneEnrolled) {
         await disableBiometric();
       }
 
@@ -104,12 +125,22 @@ class AppLock {
   /// Replaces the sealed token after every refresh.
   ///
   /// Refresh tokens rotate, so the stored one is spent the moment it is used.
-  /// Leaving it in place would give the driver a fingerprint unlock that fails
-  /// once and sends them back to the PIN for no reason.
+  /// Leaving it in place would give a fingerprint unlock that works once more
+  /// and then stops.
+  ///
+  /// Seals with the public half, so this never prompts. It also never throws:
+  /// the driver has already been let in by this point, and failing to prepare
+  /// the *next* unlock is not a reason to fail this one.
   Future<void> resealAfterRefresh(String refreshToken) async {
     if (!biometricEnabled) return;
 
-    await enableBiometric(refreshToken);
+    try {
+      await _prefs.setString(_sealedKey, await _invoke('biometricSeal', {'secret': refreshToken}));
+    } on BiometricFailure {
+      // The stored copy is now stale, so retire the option rather than leave a
+      // fingerprint unlock that will fail next time with no explanation.
+      await disableBiometric();
+    }
   }
 
   Future<String> _invoke(String method, Map<String, dynamic> arguments) async {
@@ -123,8 +154,9 @@ class AppLock {
       throw BiometricFailure(switch (e.code) {
         'cancelled' => BiometricOutcome.cancelled,
         'lockout' => BiometricOutcome.lockout,
-        'none_enrolled' || 'no_key' => BiometricOutcome.noneEnrolled,
+        'none_enrolled' => BiometricOutcome.noneEnrolled,
         'invalidated' => BiometricOutcome.invalidated,
+        'unusable' || 'no_key' => BiometricOutcome.unusable,
         _ => BiometricOutcome.failed,
       });
     }

@@ -71,6 +71,11 @@ class MainActivity : FlutterFragmentActivity() {
                             call.argument<String>("secret") ?: "",
                         ) { outcome -> reply(result, outcome) }
 
+                        // No prompt: the public half seals, so re-sealing after a
+                        // token rotates costs the driver nothing.
+                        "biometricSeal" ->
+                            result.success(BiometricVault.seal(call.argument<String>("secret") ?: ""))
+
                         "biometricUnlock" -> BiometricVault.unlock(
                             this,
                             call.argument<String>("sealed") ?: "",

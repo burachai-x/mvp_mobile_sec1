@@ -290,11 +290,27 @@ paths:
               schema: { $ref: '#/components/schemas/TokenPair' }
         '401':
           description: |
-            PIN ไม่ถูกต้อง หรือลายเซ็นอุปกรณ์ไม่ผ่าน
-            **response ต้องเหมือนกันทั้งสองกรณี** เพื่อไม่ให้เดาได้ว่าพลาดตรงไหน
+            `E_PIN_INVALID` — PIN ผิด แนบ `attempts_remaining` มาด้วย
+            `E_DEVICE_SIGNATURE_INVALID` — ลายเซ็นอุปกรณ์ไม่ผ่าน
+
+            **แยกกันโดยตั้งใจ** (เดิมตอบเหมือนกันทั้งสองกรณี)
+
+            การปิดบังไม่ได้กันใคร: จะยิง endpoint นี้ได้ต้องเซ็นด้วย private key
+            ที่อยู่ใน TEE ซึ่งดึงออกไม่ได้ ผู้ที่เห็นความต่างจึงมีแต่ตัวเครื่องที่
+            ลงทะเบียนแล้ว ซึ่งรู้อยู่แล้วว่าลายเซ็นตัวเองถูก
+            สิ่งที่กันการเดา PIN จริงคือ lockout ไม่ใช่การทำให้ response เหมือนกัน
+
+            ที่แลกไปคือแอปสั่ง enroll ใหม่เมื่อเจอ `E_DEVICE_SIGNATURE_INVALID` (§7)
+            คนขับพิมพ์ผิดหลักเดียวจึงต้องกลับไปหาเจ้าหน้าที่
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
+              example:
+                error:
+                  code: E_PIN_INVALID
+                  message: "PIN is incorrect."
+                  request_id: "0f1a…"
+                  attempts_remaining: 3
         '423':
           description: ติด lockout
           content:
@@ -927,6 +943,7 @@ components:
         - E_APP_SIGNATURE_INVALID
         - E_INTEGRITY_FAILED
         - E_DEVICE_SIGNATURE_INVALID
+        - E_PIN_INVALID
         - E_TOKEN_EXPIRED
         - E_DEVICE_REVOKED
         - E_ACTIVATION_CODE_USED

@@ -175,9 +175,21 @@ final class PinController
             ]);
         }
 
-        // Same shape as a signature failure so a wrong PIN is not distinguishable
-        // from a device that cannot authenticate at all.
-        return ApiError::deviceSignatureInvalid($request);
+        // Says plainly that the PIN was wrong.
+        //
+        // This used to answer E_DEVICE_SIGNATURE_INVALID so a wrong PIN could
+        // not be told apart from a device that cannot authenticate at all. That
+        // hid nothing worth hiding: reaching this line at all requires a
+        // signature from a key that lives in the device TEE and cannot be
+        // extracted, so the only party who sees the difference is the enrolled
+        // device — which already knows its own signature is good.
+        //
+        // What it did cost was real. §7 tells the app to clear its session and
+        // re-enroll on a signature failure, so one mistyped digit sent a driver
+        // back to staff for a new activation code.
+        return ApiError::make($request, 'E_PIN_INVALID', 'PIN is incorrect.', 401, [
+            'attempts_remaining' => max(0, $maxAttempts - ($failures % $maxAttempts)),
+        ]);
     }
 
     /**
