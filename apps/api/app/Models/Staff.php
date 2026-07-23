@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace App\Models;
 
 use Filament\Models\Contracts\FilamentUser;
+use Filament\Models\Contracts\HasName;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 
-class Staff extends Authenticatable implements FilamentUser
+class Staff extends Authenticatable implements FilamentUser, HasName
 {
     use HasUuids;
 
@@ -34,6 +35,17 @@ class Staff extends Authenticatable implements FilamentUser
     public function getAuthPasswordName(): string
     {
         return 'password_hash';
+    }
+
+    /**
+     * Filament reads a display name off the user on every authenticated page.
+     * The table has no `name` column — staff are identified by email — and
+     * without this the panel's default lookup returns null and every page after
+     * login fails to render.
+     */
+    public function getFilamentName(): string
+    {
+        return $this->email;
     }
 
     /**
