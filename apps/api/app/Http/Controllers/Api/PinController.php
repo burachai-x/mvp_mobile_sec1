@@ -124,6 +124,15 @@ final class PinController
 
         $device->forceFill(['pin_failed_count' => 0, 'pin_locked_until' => null])->save();
 
+        // One device, one live session.
+        //
+        // Without this every unlock left another refresh token alive for its
+        // full 30 days — a day of testing accumulated fourteen. One driver has
+        // one device by design (§5), so there is nothing for the extras to be
+        // used by except someone holding a copy, and an ordinary unlock would
+        // never have retired it.
+        DeviceTokens::make()->revokeAllFor($device);
+
         return response()->json(
             DeviceTokens::make()->issue($device, $request->ip(), $request->userAgent())
         );

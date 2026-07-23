@@ -245,6 +245,34 @@ final class PinTest extends ApiTestCase
             ->assertJsonPath('error.code', 'E_DEVICE_SIGNATURE_INVALID');
     }
 
+    /**
+     * A successful unlock retires whatever came before it.
+     *
+     * Each unlock used to leave another refresh token alive for its full thirty
+     * days; a day of testing left fourteen. One driver has one device (§5), so
+     * the only thing an extra token can serve is a copy of it — and no ordinary
+     * use would ever have retired it.
+     */
+    public function test_verifying_a_pin_retires_earlier_sessions(): void
+    {
+        $deviceId = $this->activeDevice(self::GOOD_PIN);
+        $device = \App\Models\Device::findOrFail($deviceId);
+
+        $first = \App\Support\DeviceTokens::make()->issue($device)['refresh_token'];
+
+        $this->signedPost('/api/v1/auth/pin/verify', ['device_id' => $deviceId, 'pin' => self::GOOD_PIN])
+            ->assertOk();
+
+        $this->assertSame(1, \App\Models\DeviceSession::query()
+            ->where('device_id', $deviceId)
+            ->whereNull('revoked_at')
+            ->count());
+
+        // And the retired one really is dead, not merely marked.
+        $this->signedPost('/api/v1/auth/refresh', ['device_id' => $deviceId, 'refresh_token' => $first])
+            ->assertStatus(401);
+    }
+
     /** The count has to be useful, or it is just noise next to the error. */
     public function test_attempts_remaining_counts_down_to_the_lockout(): void
     {
