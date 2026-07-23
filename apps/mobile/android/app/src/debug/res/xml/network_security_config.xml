@@ -6,10 +6,28 @@
     Scoped to the one development host rather than allowing cleartext globally:
     a blanket opt-in would follow the app into any build that inherits this file
     and quietly disable TLS everywhere. Release builds never see this config, so
-    certificate pinning (architecture.md §6.7) applies unchanged.
+    certificate pinning (architecture.md §11.5) applies unchanged.
 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="false">192.168.10.53</domain>
+
+        <!--
+            The dev API over https is served with a certificate from a CA that
+            exists only on a developer machine (scripts/dev-tls.sh), so Android
+            has no reason to trust it.
+
+            Trusting it here is what makes pinning testable at all. The app
+            validates the chain first and applies the pin only afterwards, so an
+            untrusted chain fails before the pin is ever consulted — and the run
+            would prove nothing about pinning.
+
+            `system` stays listed so the host behaves like production in every
+            other respect.
+        -->
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/dev_ca" />
+        </trust-anchors>
     </domain-config>
 </network-security-config>

@@ -58,3 +58,8 @@ node_modules/
 Thumbs.db
 *.swp
 *~
+
+# cert ของ dev สร้างใหม่ได้ด้วย scripts/dev-tls.sh และมี private key อยู่ด้วย
+# สำเนา CA (ค่าสาธารณะ) ที่ debug build ต้องใช้ ถูก commit ไว้ที่
+# apps/mobile/android/app/src/debug/res/raw/dev_ca.crt
+/docker/nginx/dev-tls/

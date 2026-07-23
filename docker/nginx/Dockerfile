@@ -5,6 +5,7 @@ FROM nginx:${NGINX_VERSION}-alpine
 RUN rm -f /etc/nginx/conf.d/default.conf
 
 COPY docker/nginx/security-headers.conf /etc/nginx/conf.d/security-headers.conf
+COPY docker/nginx/api-app.conf /etc/nginx/snippets/api-app.conf
 
 ARG NGINX_ENV=dev
 COPY docker/nginx/${NGINX_ENV}.conf /etc/nginx/conf.d/app.conf

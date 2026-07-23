@@ -49,6 +49,39 @@ openssl s_client -connect api.example.com:443 -servername api.example.com </dev/
 
 ---
 
+## 1.5 ทดสอบบนเครื่อง dev
+
+`scripts/dev-tls.sh` สร้าง CA + cert ของ dev (มี IP SAN ของเครื่อง) แล้วพิมพ์ pin ทั้งสองตัวออกมา
+nginx เสิร์ฟ API ผ่าน TLS ที่ **:8443** โดย mount cert เข้าไป ไม่ได้ COPY ลง image
+
+```bash
+./scripts/dev-tls.sh
+docker compose up -d nginx
+```
+
+ตรวจว่า TLS ใช้ได้จริงโดย **ไม่ใช้ `-k`** (ถ้าต้องใช้ `-k` แปลว่า chain ยังไม่ผ่าน):
+
+```bash
+curl --cacert docker/nginx/dev-tls/dev-ca.crt \
+  -H "X-App-Signature: <sig>" https://<ip>:8443/api/v1/health
+```
+
+ตรวจตรรกะ pin กับ handshake จริงด้วยโค้ดชุดเดียวกับที่แอปใช้:
+
+```bash
+cd apps/mobile
+dart run tool/check_pin.dart <ip> 8443 ../../docker/nginx/dev-tls/dev-ca.crt <pin1>,<pin2>
+```
+
+ควรได้ครบ 3 เคส — pin ถูก `accepted: true`, pin ผิด `accepted: false`,
+และถ้าไม่เชื่อ CA จะ **`HandshakeException` ตั้งแต่ก่อนถึงขั้นตรวจ pin**
+เคสที่สามคือหลักฐานว่า pinning ไม่ได้แทนที่การตรวจ chain แต่ซ้อนทับลงไป
+
+debug build เชื่อ CA ของ dev ผ่าน `network_security_config.xml`
+(`apps/mobile/android/app/src/debug/res/raw/dev_ca.crt`) — release build ไม่เห็นไฟล์นี้
+
+---
+
 ## 2. Build APK พร้อม pin
 
 ต้องมี **อย่างน้อย 2 pin** เสมอ — pin ปัจจุบัน + pin สำรอง

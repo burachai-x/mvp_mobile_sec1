@@ -91,9 +91,12 @@ services:
       - "${API_PORT:-8080}:8080"     # แอปคนขับ
       - "${STAFF_PORT:-8081}:8081"   # เจ้าหน้าที่
       - "${DL_PORT:-8082}:8082"      # manifest + APK
+      - "${API_TLS_PORT:-8443}:8443"  # api ผ่าน TLS — ทดสอบ certificate pinning
     volumes:
       - ./apps/api:/var/www/html:ro
       - ./.data/dist:/srv/dist:ro
+      # cert ของ dev เท่านั้น สร้างด้วย scripts/dev-tls.sh
+      - ./docker/nginx/dev-tls:/etc/nginx/tls:ro
     networks: [edge-net]
     depends_on:
       api: { condition: service_started }
