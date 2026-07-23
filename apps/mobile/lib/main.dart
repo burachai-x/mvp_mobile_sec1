@@ -64,6 +64,11 @@ class _EnrollScreenState extends State<EnrollScreen> {
   /// sealing it.
   String? _pendingRefreshToken;
 
+  /// In memory only. It is a bearer credential, and the device already has a
+  /// signing key that cannot be copied off the phone — writing this to disk
+  /// would be the weakest thing stored.
+  String? _accessToken;
+
   BiometricAvailability _biometric = BiometricAvailability.unavailable;
   EnrollmentResult? _enrollment;
   String? _error;
@@ -174,6 +179,9 @@ class _EnrollScreenState extends State<EnrollScreen> {
       // rotated and the sealed copy is spent.
       await _lock!.resealAfterRefresh(refreshToken);
 
+      _accessToken = tokens['access_token'] as String?;
+      unawaited(_reportIntegrity());
+
       setState(() {
         // Held so the offer to enable fingerprint unlock can appear. Every PIN
         // unlock is a chance to turn it on, not only the first one at
@@ -205,6 +213,9 @@ class _EnrollScreenState extends State<EnrollScreen> {
       // Refresh tokens rotate, so the sealed copy is spent. Leaving it would
       // give a fingerprint unlock that works exactly once more.
       await _lock!.resealAfterRefresh(tokens['refresh_token'] as String);
+
+      _accessToken = tokens['access_token'] as String?;
+      unawaited(_reportIntegrity());
 
       setState(() => _step = _Step.active);
 
@@ -243,6 +254,24 @@ class _EnrollScreenState extends State<EnrollScreen> {
   }
 
   bool _recheckingIntegrity = false;
+
+  /// Sends the signals the app already collected, once the device is unlocked.
+  ///
+  /// Not awaited and never fatal: the warning shown to the driver has already
+  /// happened, and a report that cannot be filed must not stop someone working.
+  /// It is the fleet's record, not a gate.
+  Future<void> _reportIntegrity() async {
+    final token = _accessToken;
+
+    if (token == null || _integrity.isEmpty) return;
+
+    try {
+      await _api.reportIntegrity(accessToken: token, signals: _integrity);
+    } catch (_) {
+      // Deliberately quiet. The driver can do nothing with this, and the
+      // signals are reported again at the next unlock.
+    }
+  }
 
   /// Re-reads the signals so a driver who just turned debugging off is let
   /// through without restarting the app.

@@ -49,6 +49,7 @@ return [
         'pin_setup_per_hour' => 5,
         'pin_verify_per_minute' => 10,
         'token_refresh_per_hour' => 60,
+        'integrity_per_hour' => 60,
     ],
 
     'request_signature' => [

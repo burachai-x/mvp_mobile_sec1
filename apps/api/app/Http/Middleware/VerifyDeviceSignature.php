@@ -6,9 +6,11 @@ namespace App\Http\Middleware;
 
 use App\Http\Support\ApiError;
 use App\Models\Device;
+use App\Support\DeviceTokens;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -131,6 +133,27 @@ final class VerifyDeviceSignature
 
         $fromBody = $request->input('device_id');
 
-        return is_string($fromBody) && $fromBody !== '' ? $fromBody : null;
+        if (is_string($fromBody) && $fromBody !== '') {
+            return $fromBody;
+        }
+
+        // Endpoints addressed as /devices/me carry the device nowhere else, so
+        // the bearer token names it. Only the naming is taken from the token —
+        // it selects whose public key to check against, and the signature is
+        // still what authenticates. A token for one device and a signature from
+        // another fails here exactly as it should.
+        $bearer = $request->bearerToken();
+
+        if ($bearer === null || $bearer === '') {
+            return null;
+        }
+
+        try {
+            return DeviceTokens::make()->readAccessToken($bearer)['device_id'] ?: null;
+        } catch (RuntimeException) {
+            // AuthenticateDevice reports an unusable token; here it simply
+            // fails to name a device.
+            return null;
+        }
     }
 }

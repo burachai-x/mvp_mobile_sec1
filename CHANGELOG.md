@@ -36,7 +36,11 @@
 - **หน้าล็อกแอป** — คนขับต้องใส่ PIN 6 หลักทุกครั้งที่เปิดแอป ตรวจกับ server (lockout อยู่ที่ server)
 - **ปลดล็อกด้วยลายนิ้วมือ** — refresh token ถูกเข้ารหัสด้วย key ใน Keystore ที่ TEE ไม่ยอมรันจนกว่า
   ลายนิ้วมือจะผ่าน (`setUserAuthenticationRequired`) และ key จะถูกทำลายเมื่อมีการเพิ่ม/ลบลายนิ้วมือ
-- `POST /auth/refresh` — มีใน `openapi.yaml` มาตั้งแต่ต้นแต่ยังไม่เคย implement
+- `POST /auth/refresh` และ `POST /devices/me/integrity` — มีใน `openapi.yaml` มาตั้งแต่ต้น
+  แต่ยังไม่เคย implement ทั้งคู่ · แอปรายงานผลตรวจสภาพเครื่องทุกครั้งที่ปลดล็อก
+  เขียน `audit_logs` เฉพาะรอบที่ตรวจเจอของ ไม่ใช่ทุกครั้งที่เปิดแอป
+- middleware `AuthenticateDevice` — ตรวจ bearer token ซ้อนบนลายเซ็นอุปกรณ์
+  และเช็คว่า session ยังไม่ถูกเพิกถอนทุกครั้ง
 - **ตรวจ USB Debugging / Wireless Debugging / Developer Options** อ่านจาก `Settings.Global`
   และ **หน้าเตือนภาษาไทย** ก่อนหน้าล็อก บอกว่าเจออะไรพร้อมวิธีปิด เลือก *ตรวจอีกครั้ง*
   หรือ *ใช้งานต่อ* ได้ — เตือน ไม่ปิดแอป (ปิดข้อขัดแย้ง PRD §2.2 กับ CLAUDE.md §6)

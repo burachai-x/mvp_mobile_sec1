@@ -49,6 +49,12 @@ final class RateLimitServiceProvider extends ServiceProvider
         // repeatedly through the day comes through here rather than pin-verify.
         // Bounded per hour: a device needing more than this is either broken or
         // replaying, and both are worth stopping.
+        // Once per launch is the intent; this leaves room for a driver who opens
+        // the app repeatedly without letting a loop flood the table.
+        RateLimiter::for('integrity', fn (Request $request) => Limit::perHour(
+            (int) config('security.rate_limits.integrity_per_hour', 60)
+        )->by((string) ($request->bearerToken() ?? $request->ip()))->response($this->tooMany(...)));
+
         RateLimiter::for('token-refresh', fn (Request $request) => Limit::perHour(
             (int) config('security.rate_limits.token_refresh_per_hour', 60)
         )->by((string) ($request->input('device_id') ?? $request->ip()))->response($this->tooMany(...)));

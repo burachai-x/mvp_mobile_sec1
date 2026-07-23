@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 use App\Http\Controllers\Api\EnrollController;
+use App\Http\Controllers\Api\IntegrityController;
 use App\Http\Controllers\Api\PinController;
 use App\Http\Controllers\Api\RefreshController;
+use App\Http\Middleware\AuthenticateDevice;
 use App\Http\Middleware\EnforceMinAppVersion;
 use App\Http\Middleware\VerifyAppSignature;
 use App\Http\Middleware\VerifyDeviceSignature;
@@ -42,4 +44,10 @@ Route::prefix('api/v1')
         // device key, rate limited, and the server decides.
         Route::post('auth/refresh', RefreshController::class)
             ->middleware([VerifyDeviceSignature::class, 'throttle:token-refresh']);
+
+        // Reported on every launch, so it needs an unlocked device rather than
+        // just a signature: the signature says which phone, the token says
+        // someone got past the PIN on it.
+        Route::post('devices/me/integrity', IntegrityController::class)
+            ->middleware([VerifyDeviceSignature::class, AuthenticateDevice::class, 'throttle:integrity']);
     });

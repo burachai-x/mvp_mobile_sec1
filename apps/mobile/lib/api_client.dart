@@ -104,6 +104,17 @@ class ApiClient {
     });
   }
 
+  /// Files what the device says about itself (§11.3 of the contract).
+  ///
+  /// Needs an unlocked device: the signature says which phone, the token says
+  /// someone got past the PIN on it.
+  Future<Map<String, dynamic>> reportIntegrity({
+    required String accessToken,
+    required Map<String, bool> signals,
+  }) {
+    return _send('POST', '/api/v1/devices/me/integrity', signals, bearer: accessToken);
+  }
+
   Future<Map<String, dynamic>> health() => _send('GET', '/api/v1/health', null, signed: false);
 
   Future<Map<String, dynamic>> _send(
@@ -111,6 +122,7 @@ class ApiClient {
     String path,
     Map<String, dynamic>? payload, {
     bool signed = true,
+    String? bearer,
   }) async {
     // Encoded once and reused: the signature covers a hash of these exact bytes,
     // so re-encoding could produce a different ordering and a signature the
@@ -128,6 +140,7 @@ class ApiClient {
       'X-Request-Id': newUuid(),
       'X-Timestamp': timestamp,
       'X-Nonce': nonce,
+      if (bearer != null) 'Authorization': 'Bearer $bearer',
     };
 
     if (signed) {

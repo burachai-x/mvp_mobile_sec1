@@ -117,16 +117,10 @@ final class AttestationVerifier
         // The cap is what enforces that. Counting on there being few enough
         // flags to stay under the blocking threshold breaks the moment another
         // one is added — and adding one looks harmless.
-        $selfReported = 0;
+        [$selfReportedReasons, $selfReportedScore] = $this->scoreSelfReported($integrity);
 
-        foreach (self::SELF_REPORTED as $flag) {
-            if (($integrity[$flag] ?? false) === true) {
-                $reasons[] = $flag;
-                $selfReported += 10;
-            }
-        }
-
-        $score += min($selfReported, self::SELF_REPORTED_CEILING);
+        $reasons = [...$reasons, ...$selfReportedReasons];
+        $score += $selfReportedScore;
 
         return [
             'risk_score' => min($score, 100),
@@ -135,6 +129,47 @@ final class AttestationVerifier
             'chain_verified' => $chainVerified,
             'attested' => $attested,
         ];
+    }
+
+    /**
+     * Scores only what the device says about itself.
+     *
+     * Used by the launch report, where there is no chain to judge. Attestation
+     * belongs to enrollment, where a challenge binds it to that one moment;
+     * scoring a chain here would mean accepting one the app could replay from
+     * its own past, and penalising its absence would mark every launch as risky.
+     *
+     * @param  array<string, mixed>  $integrity
+     * @return array{risk_score: int, action: string, reasons: list<string>}
+     */
+    public function assessSelfReported(array $integrity): array
+    {
+        [$reasons, $score] = $this->scoreSelfReported($integrity);
+
+        return [
+            'risk_score' => $score,
+            'action' => $this->decide($score, (bool) config('security.attestation.enforce', false)),
+            'reasons' => $reasons,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $integrity
+     * @return array{0: list<string>, 1: int}
+     */
+    private function scoreSelfReported(array $integrity): array
+    {
+        $reasons = [];
+        $score = 0;
+
+        foreach (self::SELF_REPORTED as $flag) {
+            if (($integrity[$flag] ?? false) === true) {
+                $reasons[] = $flag;
+                $score += 10;
+            }
+        }
+
+        return [$reasons, min($score, self::SELF_REPORTED_CEILING)];
     }
 
     private function decide(int $score, bool $enforce): string
