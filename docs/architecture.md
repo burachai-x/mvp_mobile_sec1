@@ -101,7 +101,27 @@ UUID ยังเก็บอยู่ แต่เป็น **secondary signal*
 #### (ค) Root detection ฝั่ง client (PRD §2.2) bypass ได้
 
 Magisk Hide / Zygisk / Frida ทำให้ผลตรวจฝั่ง client เชื่อไม่ได้
-ทำตาม PRD (พบแล้วปิดแอป) แต่ต้อง **ส่งผลขึ้น server ด้วยเสมอ** ไม่งั้นเราจะไม่มีวันรู้ว่ามีคนพยายาม bypass
+ต้อง **ส่งผลขึ้น server เสมอ** ไม่งั้นเราจะไม่มีวันรู้ว่ามีคนพยายาม bypass
+
+**สถานะ:** `apps/mobile/android/.../IntegritySignals.kt` ตรวจ 4 อย่างแล้ว
+ส่งขึ้น server ตอน enroll และแสดงบนหน้าจอแอปด้วย (ตรวจแล้วไม่บอกใคร = เท่ากับไม่ได้ตรวจ)
+
+| signal | วิธีตรวจ |
+|---|---|
+| `rooted` | ไฟล์ `su` ตามพาธมาตรฐาน · artifact ของ Magisk · `Build.TAGS` มี `test-keys` · `which su` |
+| `hook_framework_detected` | ชื่อ library ใน `/proc/self/maps` · พอร์ต 27042 ของ frida-server · คลาส Xposed/Substrate ใน stack trace |
+| `emulator` | `Build.FINGERPRINT` / `MODEL` / `PRODUCT` / `HARDWARE` |
+| `debugger_attached` | `Debug.isDebuggerConnected()` |
+
+**🔴 ยังไม่ได้ทำ: "พบแล้วปิดแอป" ตามที่ PRD §2.2 เขียนไว้**
+
+`CLAUDE.md` §6 ห้ามเขียนโค้ดที่ block หรือ allow โดยดูจาก `IntegritySignals` อย่างเดียว
+ซึ่งการปิดแอปเองก็คือการ block ด้วย signal ที่ปลอมได้ — ผลคือลงโทษคนขับที่เครื่องรายงานตามจริง
+ส่วนคนที่ซ่อนไว้ผ่านฉลุย และคนที่ตั้งใจโจมตีก็แค่ patch เช็คนี้ทิ้ง
+
+**สองข้อนี้ขัดกันจริง ต้องให้ผู้ตัดสินใจเลือก** ตาม §9 — ยังไม่เลือกให้เอง
+ถ้าจะทำ ควรทำเป็น flag ที่สั่งได้จาก signed manifest (เหมือน kill switch ของ pinning)
+ไม่ใช่ hardcode เพราะการปล่อยแอปใหม่ต้องผ่าน sideload
 
 ---
 

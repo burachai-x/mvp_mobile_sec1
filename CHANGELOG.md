@@ -33,6 +33,8 @@
 - **Signed update manifest** (§11.3) — ตรวจลายเซ็น ECDSA P-256, `expires_at`, `sequence`,
   ห้าม downgrade และตรวจว่า manifest เป็นของ package ตัวเอง · รองรับ public key หลายตัวเพื่อหมุนกุญแจ
   · `scripts/sign-manifest.sh` สำหรับลงนามออฟไลน์ (คีย์ห้ามอยู่บนเซิร์ฟเวอร์)
+- **Root / hook / emulator / debugger detection** ฝั่งแอป — ส่งขึ้น server ตอน enroll
+  และแสดงบนหน้าจอ · server ใช้ขยับ risk score เท่านั้น ไม่ตัดสินใจแทน (§4.1)
 - **Kill switch ของ certificate pinning** — ปิด pinning จากระยะไกลได้ผ่าน manifest ที่ลงนามแล้วเท่านั้น
   ปิด §11.5 ข้อ 4
 - ปุ่ม **Show QR** ในหน้า Activation Codes — ออก token ใหม่ทุกครั้งที่กด จึงเป็นช่องทางกู้คืน

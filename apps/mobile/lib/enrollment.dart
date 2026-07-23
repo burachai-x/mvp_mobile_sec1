@@ -83,14 +83,9 @@ Future<EnrollmentResult> enrollDevice({
     certificateChain: key.chain,
     deviceUuid: uuid,
     deviceInfo: deviceInfo,
-    integrity: const {
-      // Self-reported and forgeable, which the server knows: these can raise a
-      // risk score but never clear one (§4.2). Real root detection is still to
-      // come; reporting false today would be a lie rather than a gap.
-      'rooted': false,
-      'emulator': false,
-      'debugger_attached': false,
-    },
+    // Self-reported and forgeable, which the server knows: these can raise a
+    // risk score but never clear one (§4.2).
+    integrity: await DeviceKey.integritySignals(),
   );
 
   final deviceId = response['device_id'] as String;

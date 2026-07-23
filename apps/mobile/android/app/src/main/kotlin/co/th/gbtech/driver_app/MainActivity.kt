@@ -39,6 +39,8 @@ class MainActivity : FlutterActivity() {
                             result.success(DeviceKeystore.generate(challenge, strongBox))
                         }
 
+                        "integritySignals" -> result.success(IntegritySignals.collect(applicationContext))
+
                         "sign" -> {
                             val payload = call.argument<String>("payload") ?: ""
                             result.success(DeviceKeystore.sign(payload.toByteArray()))

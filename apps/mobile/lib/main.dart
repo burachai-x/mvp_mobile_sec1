@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -53,6 +55,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
   EnrollmentState? _state;
   EnrollmentResult? _enrollment;
   String? _error;
+  Map<String, bool> _integrity = const {};
   final _log = <String>[];
 
   @override
@@ -69,19 +72,33 @@ class _EnrollScreenState extends State<EnrollScreen> {
     final state = await EnrollmentState.load();
     final hasKey = await DeviceKey.exists();
 
+    // Shown to whoever is holding the phone rather than only sent to the
+    // server: a check nobody ever sees the result of is a check that has
+    // stopped working without anyone noticing.
+    final integrity = await DeviceKey.integritySignals();
+
     final updates = await UpdateState.load();
 
-    // Checked before anything is sent to the API. The manifest is what can turn
-    // pinning off (§11.5), and a fleet locked out by a bad pin set must not be
-    // locked out of the fix as well.
-    await _checkForUpdates(updates);
-
+    // Applied from stored state, which is a local read and settles before the
+    // first request can happen. The last verified manifest is what governs
+    // pinning until a newer one is checked (§11.5).
     _api.pins.killSwitched = !updates.pinningEnabled;
+
+    // Printed because the kill switch is otherwise invisible: a fleet with
+    // pinning silently off looks exactly like one with it on.
+    _note('Certificate pinning: ${_api.pins.isEnabled ? "enforced" : "off"}');
 
     setState(() {
       _state = state;
+      _integrity = integrity;
       _step = (state.deviceId != null && hasKey) ? _Step.active : _Step.needsEnrollment;
     });
+
+    // Deliberately not awaited. Blocking the first frame on a network call left
+    // the phone on a black screen for six seconds, and would have waited the
+    // full timeout whenever the update host was unreachable — a driver cannot
+    // work while the app decides whether a newer version exists.
+    unawaited(_checkForUpdates(updates));
   }
 
   /// Never silent on failure: a manifest that does not verify is either a
@@ -98,6 +115,13 @@ class _EnrollScreenState extends State<EnrollScreen> {
         verifier: verifier,
         installedVersionCode: int.parse(ApiConfig.appVersion),
       ).check(state);
+
+      // The manifest may have turned pinning off since the stored state was
+      // read, and it applies from here on.
+      if (mounted) {
+        setState(() => _api.pins.killSwitched = !state.pinningEnabled);
+        _note('Certificate pinning: ${_api.pins.isEnabled ? "enforced" : "off"}');
+      }
 
       if (available != null) {
         _note('Update available: ${available.latestVersion} (${available.latestVersionCode})');
@@ -282,7 +306,42 @@ class _EnrollScreenState extends State<EnrollScreen> {
             const SizedBox(height: 24),
             _errorBox(_error!),
           ],
+          if (_flaggedSignals.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            _integrityBox(),
+          ],
         ],
+      );
+
+  List<String> get _flaggedSignals =>
+      _integrity.entries.where((e) => e.value).map((e) => e.key).toList();
+
+  /// Amber, not red, and it blocks nothing.
+  ///
+  /// These signals are forgeable by anything able to act on them, so treating
+  /// them as a verdict would punish an honest driver whose phone reports
+  /// truthfully while a hidden one passes untouched (§4.1).
+  Widget _integrityBox() => Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade50,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.amber.shade300),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Device checks flagged: ${_flaggedSignals.join(', ')}',
+              style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Reported to staff. Enrollment is not blocked by this.',
+              style: TextStyle(color: Colors.amber.shade900, fontSize: 12),
+            ),
+          ],
+        ),
       );
 
   Widget _active() => Column(
