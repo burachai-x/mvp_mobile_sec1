@@ -10,6 +10,16 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
+# อ่าน .env ให้เห็น port ชุดเดียวกับที่ compose ใช้ ไม่งั้นถ้าใครเปลี่ยน
+# STAFF_PORT สคริปต์จะยิงไป port เดิมแล้วรายงานว่า "การแยกพัง" ทั้งที่ไม่ได้พัง
+# ซึ่งอันตรายกว่าไม่มีการเช็ค เพราะ false alarm ซ้ำๆ ทำให้คนเลิกเชื่อผลของมัน
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+
 DC="docker compose"
 fail=0
 pass() { printf '  \033[32m✅\033[0m %s\n' "$1"; }

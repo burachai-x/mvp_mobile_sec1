@@ -71,6 +71,12 @@ return [
         // Elevated session TTL, minutes (§9.2). Set to 0 to demand the PIN on
         // every single action.
         'elevation_ttl' => 10,
+
+        // Alert thresholds per staff member per hour (§9.4). These warn, they do
+        // not block: a legitimate busy afternoon must not be cut off, and the
+        // point is that someone sees the pattern, not that the request fails.
+        'reveal_alert_per_hour' => 60,
+        'download_alert_per_hour' => 30,
     ],
 
     // Android Key Attestation. MVP runs in monitor mode: record and alert, but

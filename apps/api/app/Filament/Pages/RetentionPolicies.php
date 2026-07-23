@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Pages;
 
+use App\Filament\Support\ElevatedAction;
 use App\Filament\Support\StaffAudit;
 use App\Models\RetentionPolicy;
+use App\Models\Staff;
+use App\Support\Elevation;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -43,6 +46,11 @@ class RetentionPolicies extends Page
     private const MIN_DAYS = 7;
 
     private const MAX_DAYS = 3650;
+
+    // Any elevation is not enough: §10.2 points at the same step-up gate that
+    // guards personal data, so an account that may only fetch documents cannot
+    // shorten the window that decides when records are shredded.
+    private const ELEVATION_SCOPE = 'view_pii';
 
     /** @var array<string, mixed> */
     public array $data = [];
@@ -88,9 +96,35 @@ class RetentionPolicies extends Page
             ->statePath('data');
     }
 
+    /** @return array<Action> */
+    protected function getHeaderActions(): array
+    {
+        return [
+            ElevatedAction::make('elevate', self::ELEVATION_SCOPE, function (): void {
+                Notification::make()->title('PIN accepted. You can save now.')->success()->send();
+            })->label('Enter PIN'),
+        ];
+    }
+
     public function save(): void
     {
-        // TODO(pii): require an elevated (step-up PIN) session before saving (§10.2).
+        // Re-checked here rather than trusting canAccess(): save() is a Livewire
+        // call in its own right, and this screen destroys data permanently (§10.2).
+        abort_unless(static::canAccess(), 403);
+
+        /** @var Staff $staff */
+        $staff = Filament::auth()->user();
+
+        if ((new Elevation)->current($staff, self::ELEVATION_SCOPE) === null) {
+            Notification::make()
+                ->title('Enter your PIN first')
+                ->body('Changing a retention window destroys data on the next run, so it needs a step-up PIN.')
+                ->danger()
+                ->send();
+
+            return;
+        }
+
         $new = $this->form->getState();
         $old = $this->currentValues();
 
@@ -106,7 +140,11 @@ class RetentionPolicies extends Page
                     'updated_at' => now(),
                 ]);
 
-                StaffAudit::log('retention_policy.updated', 'retention_policy', $key, [
+                // The key goes in meta, not subject_id: audit_logs.subject_id is
+                // a uuid column and a retention policy is keyed by name, so
+                // writing it there fails the insert and loses the whole change.
+                StaffAudit::log('retention_policy.updated', 'retention_policy', null, [
+                    'key' => $key,
                     'from_days' => $old[$key],
                     'to_days' => (int) $days,
                 ]);

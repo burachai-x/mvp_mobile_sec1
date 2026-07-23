@@ -9,6 +9,7 @@ use App\Filament\Resources\Drivers\Pages\ListDrivers;
 use App\Filament\Resources\Drivers\Pages\ViewDriver;
 use App\Filament\Support\ThaiNationalId;
 use App\Models\Driver;
+use App\Support\Masker;
 use BackedEnum;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
@@ -85,15 +86,35 @@ class DriverResource extends Resource
                 TextEntry::make('employee_code'),
                 TextEntry::make('masked_national_id')->label('National ID'),
                 TextEntry::make('masked_phone')->label('Phone'),
-                TextEntry::make('license_number')->placeholder('-'),
+                TextEntry::make('license_number')
+                    ->state(fn (Driver $record): ?string => Masker::tail($record->license_number))
+                    ->placeholder('-'),
                 TextEntry::make('license_expires_at')->date()->placeholder('-'),
                 TextEntry::make('status')->badge(),
                 TextEntry::make('createdBy.email')->label('Registered by'),
                 TextEntry::make('created_at')->dateTime(),
             ])->columns(2),
 
+            // Only appears once "Reveal full details" has been through the PIN,
+            // and only on the page that owns that flag — the list page renders
+            // this same infolist in its view modal (§9.1, §9.2).
+            Section::make('Full details')
+                ->visible(fn (mixed $livewire): bool => $livewire instanceof ViewDriver && $livewire->showsFullDetails())
+                ->schema([
+                    TextEntry::make('national_id')
+                        ->label('National ID')
+                        ->state(fn (Driver $record): ?string => $record->national_id_encrypted),
+                    TextEntry::make('full_phone')
+                        ->label('Phone')
+                        ->state(fn (Driver $record): ?string => $record->phone),
+                    TextEntry::make('full_license_number')
+                        ->label('License number')
+                        ->state(fn (Driver $record): ?string => $record->license_number)
+                        ->placeholder('-'),
+                ])->columns(2),
+
             // Staff may confirm which documents are on file, but the contents
-            // stay behind the download endpoint, which requires a step-up PIN (§9.1).
+            // stay behind the download action, which requires a step-up PIN (§9.1).
             Section::make('Documents on file')->schema([
                 TextEntry::make('documents.type')->label('Types')->badge()->placeholder('None'),
             ]),

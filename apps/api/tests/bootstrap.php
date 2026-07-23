@@ -20,6 +20,12 @@ declare(strict_types=1);
  * rather than in a base TestCase.
  */
 $overrides = [
+    // Without this Laravel reports APP_ENV=local and app()->runningUnitTests()
+    // is false. Every Filament testing helper is guarded by that check and
+    // silently becomes a no-op — fillForm(), assertFormSet() and callAction()
+    // included — so tests using them pass without asserting anything at all.
+    'APP_ENV' => 'testing',
+
     // Never the shared Valkey: nonces, PIN setup tokens and rate-limit counters
     // must not outlive the test that created them.
     'CACHE_STORE' => 'array',
