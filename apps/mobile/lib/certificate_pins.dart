@@ -59,7 +59,13 @@ class CertificatePins {
   final Set<String> pins;
   final DateTime? expiry;
 
-  bool get isEnabled => pins.isNotEmpty;
+  /// Turned off by a verified manifest (§11.5, kill switch).
+  ///
+  /// Separate from having no pins at all: a build still carries its pins, and
+  /// gets them back the moment a later manifest turns enforcement on again.
+  bool killSwitched = false;
+
+  bool get isEnabled => pins.isNotEmpty && !killSwitched;
 
   bool hasLapsed(DateTime now) => expiry != null && !now.isBefore(expiry!);
 

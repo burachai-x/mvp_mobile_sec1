@@ -113,5 +113,30 @@ void main() {
         expect(pins().acceptsPin('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', now: after), isTrue);
       });
     });
+
+    group('kill switch', () {
+      /// A bad pin set locks the fleet out of the API, and the API is how the
+      /// fleet would be reached. Turning enforcement off has to be possible —
+      /// but only from something signed (see update_manifest_test.dart).
+      test('stops enforcement without discarding the pins', () {
+        final set = pins()..killSwitched = true;
+
+        expect(set.isEnabled, isFalse);
+        expect(set.acceptsPin('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', now: before), isTrue);
+        expect(set.pins, isNotEmpty, reason: 'the build still carries its pins');
+      });
+
+      test('enforcement resumes when it is switched back on', () {
+        final set = pins()..killSwitched = true;
+        set.killSwitched = false;
+
+        expect(set.isEnabled, isTrue);
+        expect(set.acceptsPin('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=', now: before), isFalse);
+      });
+
+      test('is off by default', () {
+        expect(pins().killSwitched, isFalse);
+      });
+    });
   });
 }

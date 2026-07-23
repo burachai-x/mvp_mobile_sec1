@@ -30,6 +30,11 @@
   ทดสอบบนเครื่องจริงแล้วทั้งเคส pin ถูก / pin ผิด / CA ไม่น่าเชื่อถือ
   (`docs/runbook/certificate-pinning.md`)
 - `scripts/dev-tls.sh` + nginx `:8443` — TLS สำหรับ dev เพื่อทดสอบ pinning ได้จริง
+- **Signed update manifest** (§11.3) — ตรวจลายเซ็น ECDSA P-256, `expires_at`, `sequence`,
+  ห้าม downgrade และตรวจว่า manifest เป็นของ package ตัวเอง · รองรับ public key หลายตัวเพื่อหมุนกุญแจ
+  · `scripts/sign-manifest.sh` สำหรับลงนามออฟไลน์ (คีย์ห้ามอยู่บนเซิร์ฟเวอร์)
+- **Kill switch ของ certificate pinning** — ปิด pinning จากระยะไกลได้ผ่าน manifest ที่ลงนามแล้วเท่านั้น
+  ปิด §11.5 ข้อ 4
 - ปุ่ม **Show QR** ในหน้า Activation Codes — ออก token ใหม่ทุกครั้งที่กด จึงเป็นช่องทางกู้คืน
   ได้โดยยังเก็บแค่ hash ไว้เหมือนเดิม (§6.2)
 
@@ -40,6 +45,8 @@
 - `.gitleaks.toml` พร้อม rule เฉพาะโปรเจกต์ (KEK, pepper, manifest key, เลขบัตร 13 หลัก)
 
 ### Changed
+- รูปแบบ manifest: `payload` เป็น base64 ของไบต์ที่ถูกเซ็นจริง แทน "canonical JSON"
+  เพื่อตัดปัญหาฝั่งเซ็นกับฝั่งตรวจ serialize ไม่ตรงกัน (`docs/architecture.md` §11.3)
 - อายุ activation code ดีฟอลต์ 7 วัน → **15 นาที** ให้ตรงกับที่ `docs/architecture.md` §6.2 ระบุไว้
 - การออก code ไม่ลงนาม token อีกแล้ว แถวที่สร้างใหม่ยัง redeem ไม่ได้จนกว่าจะกด Show QR ครั้งแรก
 

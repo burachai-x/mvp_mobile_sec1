@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 import 'certificate_pins.dart';
+import 'update_manifest.dart';
 
 /// Build-time configuration.
 ///
@@ -74,5 +75,30 @@ class ApiConfig {
 
     return SecurityContext(withTrustedRoots: true)
       ..setTrustedCertificatesBytes(base64.decode(_devTrustedCa));
+  }
+
+  /// Where the signed manifest lives (§11.3).
+  ///
+  /// A different host from the API on purpose, so the two can be pinned
+  /// separately — and this one is not pinned at all.
+  static const manifestUrl = String.fromEnvironment('UPDATE_MANIFEST_URL');
+
+  /// Comma-separated base64 SPKI P-256 keys allowed to sign a manifest.
+  ///
+  /// The matching private keys never touch a server: whoever can sign can
+  /// install software on every driver's phone. More than one so a key can be
+  /// rotated — without a spare already embedded, losing the key means no update
+  /// can ever be delivered again.
+  static const _manifestKeys = String.fromEnvironment('UPDATE_MANIFEST_KEYS');
+
+  static const packageName = 'co.th.gbtech.driver_app';
+
+  /// Null when no update channel is configured, which is how the dev build runs.
+  static ManifestVerifier? manifestVerifier() {
+    final keys = _manifestKeys.split(',').map((k) => k.trim()).where((k) => k.isNotEmpty).toList();
+
+    if (manifestUrl.isEmpty || keys.isEmpty) return null;
+
+    return ManifestVerifier(publicKeys: keys, packageName: packageName);
   }
 }

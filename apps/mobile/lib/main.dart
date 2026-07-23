@@ -6,6 +6,9 @@ import 'api_client.dart';
 import 'api_config.dart';
 import 'device_key.dart';
 import 'enrollment.dart';
+import 'update_checker.dart';
+import 'update_manifest.dart';
+import 'update_state.dart';
 
 void main() {
   runApp(const DriverApp());
@@ -66,10 +69,45 @@ class _EnrollScreenState extends State<EnrollScreen> {
     final state = await EnrollmentState.load();
     final hasKey = await DeviceKey.exists();
 
+    final updates = await UpdateState.load();
+
+    // Checked before anything is sent to the API. The manifest is what can turn
+    // pinning off (§11.5), and a fleet locked out by a bad pin set must not be
+    // locked out of the fix as well.
+    await _checkForUpdates(updates);
+
+    _api.pins.killSwitched = !updates.pinningEnabled;
+
     setState(() {
       _state = state;
       _step = (state.deviceId != null && hasKey) ? _Step.active : _Step.needsEnrollment;
     });
+  }
+
+  /// Never silent on failure: a manifest that does not verify is either a
+  /// mistake in releasing or someone trying to install software on a driver's
+  /// phone, and both need to be seen (§11.3).
+  Future<void> _checkForUpdates(UpdateState state) async {
+    final verifier = ApiConfig.manifestVerifier();
+
+    if (verifier == null) return;
+
+    try {
+      final available = await UpdateChecker(
+        manifestUrl: ApiConfig.manifestUrl,
+        verifier: verifier,
+        installedVersionCode: int.parse(ApiConfig.appVersion),
+      ).check(state);
+
+      if (available != null) {
+        _note('Update available: ${available.latestVersion} (${available.latestVersionCode})');
+      }
+    } on UpdateRefused catch (e) {
+      _note('Update check refused: ${e.reason.name}');
+    } catch (e) {
+      // A server that is simply unreachable must not stop a driver working.
+      _note('Update check failed: $e');
+    }
   }
 
   Future<void> _scan() async {

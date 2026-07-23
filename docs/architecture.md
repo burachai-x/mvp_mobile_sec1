@@ -859,10 +859,27 @@ GET https://api.example/app/v1/manifest.json
 
 #### รูปแบบไฟล์
 
+> **แก้จากรุ่นก่อน:** เดิมเขียนว่าลงนามบน "canonical JSON ของ payload"
+> เปลี่ยนเป็นส่ง `payload` เป็น **base64 ของไบต์ที่ถูกเซ็นจริง**
+>
+> เหตุผล: ถ้าให้ฝั่งเซ็นกับฝั่งตรวจต่างคน serialize เอง ลำดับ key / รูปแบบตัวเลข /
+> การ escape unicode ต่างกันเมื่อไหร่ ลายเซ็นก็ไม่ตรง อาการที่เห็นคือ
+> **release ที่ถูกต้องถูกทั้งฐานปฏิเสธ** ซึ่งไล่หาสาเหตุยากมากและเกิดตอนปล่อยของจริง
+> การส่งไบต์ไปตรงๆ ตัดปัญหาทั้งหมวดนี้ทิ้ง แลกกับ manifest ที่อ่านด้วยตาไม่ได้ทันที
+> (ใช้ `base64 -d` ดูได้)
+
 ```json
 {
-  "payload": {
-    "package": "com.example.driver",
+  "payload": "<base64 ของ JSON ข้างล่างนี้ ตามไบต์ที่ถูกเซ็นเป๊ะ>",
+  "signature": "base64(ECDSA P-256 SHA-256 over ไบต์เหล่านั้น)"
+}
+```
+
+payload ที่ถอด base64 แล้ว:
+
+```json
+{
+  "package": "com.example.driver",
     "latest_version": "1.4.2",
     "latest_version_code": 142,
     "min_supported_version_code": 130,
@@ -872,14 +889,15 @@ GET https://api.example/app/v1/manifest.json
     "signing_cert_sha256": "3a7b…",
     "mandatory": true,
     "release_notes_th": "แก้ปัญหาการสแกน QR บนเครื่องบางรุ่น",
-    "sequence": 47,
-    "published_at": "2026-07-20T10:00:00Z",
-    "expires_at": "2026-07-27T10:00:00Z"
-  },
-  "signature": "base64(ES256 over canonical JSON of payload)",
-  "key_id": "release-2026-01"
+  "sequence": 47,
+  "published_at": "2026-07-20T10:00:00Z",
+  "expires_at": "2026-07-27T10:00:00Z",
+  "certificate_pinning_enabled": true
 }
 ```
+
+`certificate_pinning_enabled` คือ **kill switch ของ §11.5 ข้อ 4**
+ไม่มีฟิลด์นี้ = ถือว่า `true` — manifest ที่ลืมใส่ต้องไม่ปิด pinning โดยบังเอิญ
 
 #### 🔴 manifest ต้องถูกลงนาม — HTTPS อย่างเดียวไม่พอ
 
@@ -907,6 +925,29 @@ CA ออกใบรับรองผิดพลาดหรือถูก�
 6. **ตรวจว่า signing cert ของ APK ตรงกับ `signing_cert_sha256` และตรงกับของตัวเอง**
    (Android บังคับข้อนี้ตอนติดตั้งทับอยู่แล้ว แต่ตรวจเองก่อนจะได้ error ที่อธิบายได้ และกันการหลอกให้ผู้ใช้ถอนแอปเก่าก่อนติดตั้งของปลอม)
 7. ถ้าข้อใดไม่ผ่าน → **หยุด แจ้งเตือน และรายงานขึ้น server** อย่าลองใหม่เงียบๆ
+
+#### สถานะการ implement
+
+`apps/mobile/lib/update_manifest.dart` · `update_checker.dart` · `update_state.dart`
+เครื่องมือลงนาม: `scripts/sign-manifest.sh` (คีย์ต้องอยู่นอกเซิร์ฟเวอร์)
+
+| ข้อ | สถานะ |
+|---|---|
+| 1 · ลายเซ็น | ✅ ECDSA P-256 · รองรับหลาย public key เพื่อหมุนกุญแจ · เทสต์เทียบกับลายเซ็นที่ openssl สร้าง |
+| 2 · `expires_at` | ✅ |
+| 3 · `sequence` | ✅ เก็บค่าสูงสุดที่เคยรับไว้ ขึ้นทางเดียว |
+| 4 · ห้าม downgrade | ✅ |
+| 5 · `apk_sha256` | ⚠️ เขียนและเทสต์แล้ว (`matchesDownload`) แต่**ยังไม่มีตัวดาวน์โหลดมาเรียก** |
+| 6 · signing cert | ⚠️ เขียนและเทสต์แล้ว (`matchesSigningCertificate`) แต่**ยังไม่มีตัวติดตั้งมาเรียก** |
+| 7 · ไม่ลองใหม่เงียบๆ | ✅ โยน `UpdateRefused` พร้อมเหตุผล แล้วแสดงบนหน้าจอ |
+
+**ยังไม่ได้ทำ: ตัวดาวน์โหลดและติดตั้ง APK** ตอนนี้แอปเช็ค ตรวจ และ *รายงาน* ว่ามีเวอร์ชันใหม่
+แต่ยังไม่ดาวน์โหลดหรือเรียกตัวติดตั้ง จึงยังไม่มีทางที่ข้อ 5–6 จะถูกข้าม
+เพราะไม่มีเส้นทางติดตั้งอยู่เลย — **ห้ามเพิ่มตัวติดตั้งโดยไม่ต่อข้อ 5–6 เข้าไปพร้อมกัน** (CLAUDE.md §7)
+
+**ข้อจำกัดที่ยอมรับ:** `sequence` เก็บใน SharedPreferences ซึ่งบนเครื่อง root แก้ได้
+จึง replay manifest เก่าได้ในทางทฤษฎี ตัวจำกัดความเสียหายคือ `expires_at`
+เพราะ manifest เก่าที่ถูก replay มักหมดอายุไปแล้ว — บันทึกไว้ใน threat model ไม่ใช่ซ่อนไว้ในโค้ด
 
 #### การบังคับอัปเดต
 
@@ -985,7 +1026,7 @@ Garage อยู่หลัง network ภายในและคุยกั�
 | 1 · SPKI pin | ✅ ตรวจ pin กับ SPKI ที่ดึงจาก cert จริง เทียบผลกับ openssl ในเทสต์ (RSA + EC) |
 | 2 · backup pin ≥ 1 | ✅ บังคับ — ใส่มา 1 ตัวจะโยน `ArgumentError` ตอนเปิดแอป |
 | 3 · pin set มีวันหมดอายุ | ✅ `API_CERTIFICATE_PIN_EXPIRY` พ้นวันแล้ว fallback ไป system trust store |
-| 4 · kill switch ฝั่ง server | ❌ **ยังไม่ได้ทำ** — ต้องรอช่องอัปเดต manifest (§11.3) ซึ่งยังไม่มี |
+| 4 · kill switch ฝั่ง server | ✅ `certificate_pinning_enabled` ใน signed manifest (§11.3) · ปิดได้เฉพาะจาก manifest ที่ลายเซ็นผ่าน ไม่หมดอายุ และ sequence ใหม่กว่าเดิม |
 | 5 · runbook การต่ออายุ | ✅ |
 
 **จังหวะการตรวจ:** สร้าง socket เองผ่าน `HttpClient.connectionFactory` แล้วตรวจ pin หลัง handshake
