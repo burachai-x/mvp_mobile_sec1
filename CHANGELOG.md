@@ -25,6 +25,9 @@
 - `make verify-isolation` — ยืนยันว่า `api` ไม่มี KEK และต่อ Garage ไม่ได้
 - แอปคนขับ (`apps/mobile/`) — สแกน QR, สร้าง EC P-256 ใน Android Keystore พร้อม attestation
   challenge, enroll, ตั้ง PIN และเซ็นทุก request ด้วย key ที่ export ไม่ได้
+- **Certificate pinning** ฝั่งแอป — SPKI pin + backup pin บังคับ, pin set มีวันหมดอายุที่
+  fallback ไป system trust store, ตรวจก่อนเขียน request byte แรก
+  (`docs/runbook/certificate-pinning.md`)
 - ปุ่ม **Show QR** ในหน้า Activation Codes — ออก token ใหม่ทุกครั้งที่กด จึงเป็นช่องทางกู้คืน
   ได้โดยยังเก็บแค่ hash ไว้เหมือนเดิม (§6.2)
 

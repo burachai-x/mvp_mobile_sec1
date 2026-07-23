@@ -976,6 +976,27 @@ Garage อยู่หลัง network ภายในและคุยกั�
 > ข้อกังวลนั้นยังจริง แต่แก้ได้ด้วย SPKI pin + backup pin + ไม่ pin ช่องอัปเดต
 > และเมื่อ L3 ถูกตัดไป (ADR 0003) การปิดช่องทาง MITM ก็มีน้ำหนักมากขึ้น
 
+#### สถานะการ implement
+
+`apps/mobile/lib/certificate_pins.dart` · runbook: `docs/runbook/certificate-pinning.md`
+
+| ข้อบังคับ | สถานะ |
+|---|---|
+| 1 · SPKI pin | ✅ ตรวจ pin กับ SPKI ที่ดึงจาก cert จริง เทียบผลกับ openssl ในเทสต์ (RSA + EC) |
+| 2 · backup pin ≥ 1 | ✅ บังคับ — ใส่มา 1 ตัวจะโยน `ArgumentError` ตอนเปิดแอป |
+| 3 · pin set มีวันหมดอายุ | ✅ `API_CERTIFICATE_PIN_EXPIRY` พ้นวันแล้ว fallback ไป system trust store |
+| 4 · kill switch ฝั่ง server | ❌ **ยังไม่ได้ทำ** — ต้องรอช่องอัปเดต manifest (§11.3) ซึ่งยังไม่มี |
+| 5 · runbook การต่ออายุ | ✅ |
+
+**จังหวะการตรวจ:** สร้าง socket เองผ่าน `HttpClient.connectionFactory` แล้วตรวจ pin หลัง handshake
+แต่**ก่อน**เขียน request byte แรกออกไป — ถ้าอ่าน cert จาก response ก็สายไปแล้ว
+เพราะ body (PIN, payload ที่เซ็นแล้ว) ถูกส่งให้ปลายทางที่ผิดไปเรียบร้อย
+
+**ยังพิสูจน์ไม่ได้:** ระบบยังไม่มี TLS เลย (dev รัน HTTP บน LAN) จึงยังไม่เคยรัน handshake จริง
+ตรรกะ pin ทดสอบครบแล้ว แต่การตรวจ end-to-end ต้องรอ TLS ก่อน
+ระหว่างนี้ build ที่ตั้ง pin ไว้แต่ `API_BASE_URL` เป็น `http://` จะโยน `StateError` ทันที
+กันเคส "ทุกอย่างดูใช้ได้ แต่ไม่ได้ pin อะไรเลย"
+
 ---
 
 ## 12. Docker

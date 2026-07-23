@@ -4,6 +4,7 @@ import 'dart:math';
 
 import 'package:crypto/crypto.dart';
 
+import 'certificate_pins.dart';
 import 'device_key.dart';
 
 class ApiException implements Exception {
@@ -23,11 +24,17 @@ class ApiException implements Exception {
 /// the device signature, the timestamp and the nonce, which together stop a
 /// captured request from being replayed (architecture.md §6.5).
 class ApiClient {
-  ApiClient(this.baseUrl, {required this.appSignature, required this.appVersion});
+  ApiClient(
+    this.baseUrl, {
+    required this.appSignature,
+    required this.appVersion,
+    CertificatePins? pins,
+  }) : pins = pins ?? CertificatePins.disabled();
 
   final String baseUrl;
   final String appSignature;
   final String appVersion;
+  final CertificatePins pins;
 
   final _random = Random.secure();
 
@@ -108,7 +115,7 @@ class ApiClient {
           await DeviceKey.sign(canonicalString(method, path, body, timestamp, nonce));
     }
 
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    final client = _client();
 
     try {
       final request = await client.openUrl(method, Uri.parse('$baseUrl$path'));
@@ -139,6 +146,63 @@ class ApiClient {
     } finally {
       client.close();
     }
+  }
+
+
+  /// An HttpClient that checks the pin before the request is written.
+  ///
+  /// The socket is created here rather than left to HttpClient, which is what
+  /// makes the check useful: taking the certificate off the response would mean
+  /// the body — a PIN, a signed payload — had already been sent to whoever
+  /// answered. Supplying the socket ourselves means a mismatched server never
+  /// receives anything.
+  ///
+  /// Dart uses the returned socket as-is for a direct connection, so the TLS
+  /// session established here is the one the request travels over, not a second
+  /// one negotiated afterwards.
+  HttpClient _client() {
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+
+    if (!pins.isEnabled) return client;
+
+    client.connectionFactory = (uri, proxyHost, proxyPort) async {
+      // Pins configured against a cleartext URL is a build mistake, and the
+      // dangerous kind: everything works, and nothing is pinned. A build with
+      // no pins at all skips this factory entirely, which is how the LAN dev
+      // build runs.
+      if (uri.scheme != 'https') {
+        throw StateError(
+          'Certificate pins are configured but $uri is not https, so nothing can be pinned.',
+        );
+      }
+
+      final task = await SecureSocket.startConnect(
+        uri.host,
+        uri.port,
+        // Chain and hostname are still validated against the system trust
+        // store. Pinning narrows what is accepted; it does not replace it.
+        onBadCertificate: (_) => false,
+      );
+
+      // Awaiting here is what makes the check meaningful: the handshake
+      // finishes, the pin is applied, and only then is the task handed back for
+      // Dart to write the request over. Throwing leaves the request unsent.
+      final socket = await task.socket;
+      final certificate = socket.peerCertificate;
+
+      if (certificate == null || !pins.accepts(certificate)) {
+        socket.destroy();
+
+        throw CertificatePinMismatch(
+          uri.host,
+          certificate == null ? 'no certificate' : CertificatePins.pinOf(certificate),
+        );
+      }
+
+      return task;
+    };
+
+    return client;
   }
 
   /// UUID v4 from a CSPRNG. Public so the enrollment flow can mint the

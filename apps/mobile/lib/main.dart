@@ -42,6 +42,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
     ApiConfig.baseUrl,
     appSignature: ApiConfig.appSignature,
     appVersion: ApiConfig.appVersion,
+    pins: ApiConfig.certificatePins(),
   );
 
   _Step _step = _Step.loading;
