@@ -37,16 +37,27 @@ services:
     build:
       args:
         NGINX_ENV: prod
-    volumes:
-      - ./.data/dist:/srv/dist:ro
-      - appstorage:/var/www/html/storage:ro
     ports:
-      # ชื่อโฮสต์แยกช่องทาง (SNI) เหมือน dev — api / staff / dl บน 443 เดียว
-      # :80 redirect ไป https
-      # TODO(prod): ยังไม่มี docker/nginx/prod.conf — build prod จะพังที่ COPY
-      #             จนกว่าจะสร้าง (แยก cert ของ dl ออกจาก api ด้วย §11.5)
+      # ชื่อโฮสต์แยกช่องทาง (SNI) — api / staff / dl บน 443 เดียว, :80 redirect
       - "80:80"
       - "443:443"
+    environment:
+      # prod.conf เป็น template — nginx แทนค่าตอน start ดู docs/runbook/prod-nginx.md
+      API_HOST:   ${API_HOST:?ตั้งโดเมนของ API เช่น api.example.com}
+      STAFF_HOST: ${STAFF_HOST:?ตั้งโดเมนของหน้าเจ้าหน้าที่}
+      DL_HOST:    ${DL_HOST:?ตั้งโดเมนของช่องอัปเดต — ต้องคนละโดเมนกับ API (§11.5)}
+    volumes:
+      # base compose bind-mount ./apps/api เป็น source ตอน dev — prod ทับด้วย
+      # named volume ว่าง เพื่อไม่ให้ source จาก host หลุดเข้า prod (โค้ดอบใน
+      # image แล้ว nginx ใช้แค่ public/ ให้ try_files resolve ได้)
+      - nginxroot:/var/www/html:ro
+      - ./.data/dist:/srv/dist:ro
+      - appstorage:/var/www/html/storage:ro
+      # cert และ ACL mount ตอน runtime ห้ามอบเข้า image (CLAUDE.md §5)
+      #   ./secrets/tls/       → system.{crt,key} + dl.{crt,key} (คนละใบ §11.5)
+      #   ./secrets/staff-acl/ → allow ของ VPN/office (ADR 0007)
+      - ./secrets/tls:/etc/nginx/tls:ro
+      - ./secrets/staff-acl:/etc/nginx/staff-acl:ro
     <<: *hardening
 
   api:
@@ -152,3 +163,5 @@ secrets:
 
 volumes:
   appstorage:
+  # ว่างเปล่าโดยเจตนา — ทับ bind-mount source ของ dev ไม่ให้หลุดเข้า prod
+  nginxroot:
