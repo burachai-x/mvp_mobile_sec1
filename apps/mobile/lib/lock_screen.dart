@@ -11,6 +11,7 @@ class LockScreen extends StatefulWidget {
     required this.onPin,
     required this.onBiometric,
     required this.biometricAvailable,
+    this.biometricNote,
   });
 
   /// Verified against the server, which owns the lockout.
@@ -20,6 +21,11 @@ class LockScreen extends StatefulWidget {
   final Future<String?> Function() onBiometric;
 
   final bool biometricAvailable;
+
+  /// Why the fingerprint key is missing, when it is. Shown rather than leaving
+  /// a blank space where the button would be — a driver cannot tell an app that
+  /// cannot offer it from one they have set up wrongly.
+  final String? biometricNote;
 
   @override
   State<LockScreen> createState() => _LockScreenState();
@@ -128,6 +134,17 @@ class _LockScreenState extends State<LockScreen> {
               'ลืมรหัส PIN ให้ติดต่อเจ้าหน้าที่',
               style: TextStyle(fontSize: 13, color: Colors.black54),
             ),
+            if (!widget.biometricAvailable && widget.biometricNote != null) ...[
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Text(
+                  widget.biometricNote!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12, color: Colors.black38),
+                ),
+              ),
+            ],
             const Spacer(flex: 3),
             _keypad(),
             const SizedBox(height: 12),

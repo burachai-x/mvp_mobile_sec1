@@ -47,5 +47,8 @@ flutter {
 dependencies {
     // BiometricPrompt with a CryptoObject, which is what binds the fingerprint
     // to a Keystore key instead of to a boolean the app could ignore.
-    implementation("androidx.biometric:biometric:1.1.0")
+    // 1.1.0 predates Android 12; canAuthenticate() misreports on newer
+    // releases, which showed up as "no fingerprint available" on a phone that
+    // has a class 3 sensor with a finger enrolled.
+    implementation("androidx.biometric:biometric:1.2.0-alpha05")
 }

@@ -11,7 +11,14 @@ class BiometricFailure implements Exception {
 }
 
 /// Whether the device can gate a key behind a fingerprint.
-enum BiometricAvailability { available, noneEnrolled, noHardware, unavailable }
+enum BiometricAvailability { available, noneEnrolled, noHardware, updateRequired, unavailable }
+
+/// What the platform reported, kept verbatim for the diagnostics panel.
+///
+/// Without it an unexpected status collapses into "biometrics are off" with no
+/// way to tell why — which is exactly what happened the first time this ran on
+/// a handset.
+String lastAvailabilityReport = 'not checked';
 
 /// Locks the app behind the driver's PIN, with a fingerprint as a shortcut.
 ///
@@ -36,12 +43,23 @@ class AppLock {
   bool get biometricEnabled => _prefs.getString(_sealedKey) != null;
 
   static Future<BiometricAvailability> availability() async {
-    final value = await _channel.invokeMethod<String>('biometricAvailability');
+    final String value;
+
+    try {
+      value = await _channel.invokeMethod<String>('biometricAvailability') ?? 'unavailable:null';
+    } on PlatformException catch (e) {
+      lastAvailabilityReport = 'error:${e.code}';
+
+      return BiometricAvailability.unavailable;
+    }
+
+    lastAvailabilityReport = value;
 
     return switch (value) {
       'available' => BiometricAvailability.available,
       'none_enrolled' => BiometricAvailability.noneEnrolled,
       'no_hardware' => BiometricAvailability.noHardware,
+      'update_required' => BiometricAvailability.updateRequired,
       _ => BiometricAvailability.unavailable,
     };
   }

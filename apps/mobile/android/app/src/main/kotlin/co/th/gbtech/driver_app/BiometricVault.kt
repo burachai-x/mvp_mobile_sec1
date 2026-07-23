@@ -45,14 +45,21 @@ object BiometricVault {
      * BIOMETRIC_STRONG only: a class 2 sensor cannot gate a Keystore key, so
      * accepting one would mean the prompt appears and protects nothing.
      */
-    fun availability(activity: FragmentActivity): String =
-        when (BiometricManager.from(activity).canAuthenticate(ALLOWED)) {
+    fun availability(activity: FragmentActivity): String {
+        val status = BiometricManager.from(activity).canAuthenticate(ALLOWED)
+
+        return when (status) {
             BiometricManager.BIOMETRIC_SUCCESS -> "available"
             BiometricManager.BIOMETRIC_ERROR_NONE_ENROLLED -> "none_enrolled"
             BiometricManager.BIOMETRIC_ERROR_NO_HARDWARE,
             BiometricManager.BIOMETRIC_ERROR_HW_UNAVAILABLE -> "no_hardware"
-            else -> "unavailable"
+            BiometricManager.BIOMETRIC_ERROR_SECURITY_UPDATE_REQUIRED -> "update_required"
+            // Carries the raw status so an unexpected value can be identified
+            // instead of collapsing into a silent "no". BiometricManager gained
+            // codes over time and this library does not know them all.
+            else -> "unavailable:$status"
         }
+    }
 
     fun hasSecret(): Boolean = keyStore().containsAlias(ALIAS)
 

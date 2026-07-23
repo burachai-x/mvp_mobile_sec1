@@ -120,6 +120,8 @@ class _EnrollScreenState extends State<EnrollScreen> {
     // the phone on a black screen for six seconds, and would have waited the
     // full timeout whenever the update host was unreachable — a driver cannot
     // work while the app decides whether a newer version exists.
+    _note('Biometric: $lastAvailabilityReport');
+
     unawaited(_checkForUpdates(updates));
   }
 
@@ -355,6 +357,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
         onPin: _unlockWithPin,
         onBiometric: _unlockWithBiometric,
         biometricAvailable: _biometricUsable,
+        biometricNote: _biometricNote(),
       );
     }
 
@@ -487,6 +490,20 @@ class _EnrollScreenState extends State<EnrollScreen> {
         ],
       );
 
+  /// One sentence explaining the state of fingerprint unlock, always non-empty.
+  String _biometricNote() => switch (_biometric) {
+        BiometricAvailability.available =>
+          'Fingerprint unlock can be turned on after you enter your PIN.',
+        BiometricAvailability.noneEnrolled =>
+          'Add a fingerprint in phone settings to unlock without typing.',
+        BiometricAvailability.noHardware =>
+          'This phone has no fingerprint sensor the app can use.',
+        BiometricAvailability.updateRequired =>
+          'A security update is needed before fingerprint unlock can be used.',
+        BiometricAvailability.unavailable =>
+          'Fingerprint unlock unavailable ($lastAvailabilityReport).',
+      };
+
   Widget _biometricSetting() {
     if (_biometricUsable) {
       return TextButton.icon(
@@ -511,13 +528,10 @@ class _EnrollScreenState extends State<EnrollScreen> {
       );
     }
 
+    // Never renders nothing. A blank space here is what made this look like the
+    // driver had done something wrong when the phone simply could not offer it.
     return Text(
-      switch (_biometric) {
-        BiometricAvailability.noneEnrolled =>
-          'Set up a fingerprint in phone settings to unlock without typing.',
-        BiometricAvailability.noHardware => '',
-        _ => '',
-      },
+      _biometricNote(),
       textAlign: TextAlign.center,
       style: const TextStyle(fontSize: 12, color: Colors.black54),
     );
