@@ -992,9 +992,25 @@ Garage อยู่หลัง network ภายในและคุยกั�
 แต่**ก่อน**เขียน request byte แรกออกไป — ถ้าอ่าน cert จาก response ก็สายไปแล้ว
 เพราะ body (PIN, payload ที่เซ็นแล้ว) ถูกส่งให้ปลายทางที่ผิดไปเรียบร้อย
 
-**ยังพิสูจน์ไม่ได้:** ระบบยังไม่มี TLS เลย (dev รัน HTTP บน LAN) จึงยังไม่เคยรัน handshake จริง
-ตรรกะ pin ทดสอบครบแล้ว แต่การตรวจ end-to-end ต้องรอ TLS ก่อน
-ระหว่างนี้ build ที่ตั้ง pin ไว้แต่ `API_BASE_URL` เป็น `http://` จะโยน `StateError` ทันที
+**พิสูจน์บนเครื่องจริงแล้ว** (Xiaomi 2201116PG, Android 13) ผ่าน TLS ที่ `:8443` ของ dev
+
+| เคส | ผล |
+|---|---|
+| pin ถูก | enroll `201` → ตั้ง PIN → device `active` · attestation risk 0 · `chain_verified: true` |
+| pin ผิด (CA เดียวกัน) | handshake สำเร็จ แล้ว**ปฏิเสธที่ขั้นตรวจ pin** · nginx log **0 request** · code ยัง `used=0/1` |
+| ไม่เชื่อ CA | `CERTIFICATE_VERIFY_FAILED` ตั้งแต่ handshake ก่อนถึงขั้นตรวจ pin |
+
+เคสที่สองคือเคสที่มีค่าที่สุด — ยืนยันว่า activation token, device public key และ attestation chain
+**ไม่เคยถูกส่งออกไป**หาปลายทางที่ pin ไม่ตรง ต่างจากการอ่าน cert จาก response ที่ตอนรู้ตัวก็สายไปแล้ว
+(ยิง `curl` เข้า `:8443` ทันทีหลังจากนั้นได้ `200` เพื่อยืนยันว่า 0 request ไม่ได้แปลว่า server ล่ม)
+
+เคสที่สามยืนยันว่า pinning **ซ้อนทับ**การตรวจ chain ไม่ได้แทนที่
+
+**กับดักที่เจอตอนทดสอบ:** `network_security_config.xml` **ใช้กับ Flutter ไม่ได้**
+`dart:io` คุยกับ BoringSSL ของตัวเอง ไม่เคยอ่านไฟล์นั้น → trust anchor ถูกมองข้ามเงียบๆ
+CA ของ dev ต้องส่งเข้า `SecurityContext` ในโค้ด และแอปจะโยน `StateError` ถ้าค่านั้นถูกตั้งใน release build
+
+build ที่ตั้ง pin ไว้แต่ `API_BASE_URL` เป็น `http://` ก็โยน `StateError` เช่นกัน
 กันเคส "ทุกอย่างดูใช้ได้ แต่ไม่ได้ pin อะไรเลย"
 
 ---

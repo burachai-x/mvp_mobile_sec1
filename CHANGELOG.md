@@ -27,7 +27,9 @@
   challenge, enroll, ตั้ง PIN และเซ็นทุก request ด้วย key ที่ export ไม่ได้
 - **Certificate pinning** ฝั่งแอป — SPKI pin + backup pin บังคับ, pin set มีวันหมดอายุที่
   fallback ไป system trust store, ตรวจก่อนเขียน request byte แรก
+  ทดสอบบนเครื่องจริงแล้วทั้งเคส pin ถูก / pin ผิด / CA ไม่น่าเชื่อถือ
   (`docs/runbook/certificate-pinning.md`)
+- `scripts/dev-tls.sh` + nginx `:8443` — TLS สำหรับ dev เพื่อทดสอบ pinning ได้จริง
 - ปุ่ม **Show QR** ในหน้า Activation Codes — ออก token ใหม่ทุกครั้งที่กด จึงเป็นช่องทางกู้คืน
   ได้โดยยังเก็บแค่ hash ไว้เหมือนเดิม (§6.2)
 
