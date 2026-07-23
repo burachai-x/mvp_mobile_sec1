@@ -13,6 +13,8 @@ import 'integrity_warning.dart';
 import 'lock_screen.dart';
 import 'update_checker.dart';
 import 'update_manifest.dart';
+import 'update_installer.dart';
+import 'update_screen.dart';
 import 'update_state.dart';
 
 void main() {
@@ -80,6 +82,13 @@ class _EnrollScreenState extends State<EnrollScreen> {
   bool _integrityAcknowledged = false;
 
   bool _recheckingIntegrity = false;
+
+  /// The update a verified manifest offered, if any.
+  UpdateManifest? _update;
+
+  /// Skipping lasts for this run only, and is not offered at all when the
+  /// server will refuse to talk to this version.
+  bool _updateSkipped = false;
 
   final _log = <String>[];
 
@@ -163,6 +172,8 @@ class _EnrollScreenState extends State<EnrollScreen> {
 
       if (available != null) {
         _note('Update available: ${available.latestVersion} (${available.latestVersionCode})');
+
+        if (mounted) setState(() => _update = available);
       }
     } on UpdateRefused catch (e) {
       _note('Update check refused: ${e.reason.name}');
@@ -197,9 +208,42 @@ class _EnrollScreenState extends State<EnrollScreen> {
 
       return null;
     } on ApiException catch (e) {
+      // Staff reset the PIN. The device key is untouched, so it can ask for a
+      // setup token itself rather than being sent back to enrollment.
+      if (e.code == 'E_PIN_RESET_REQUIRED') {
+        return await _startPinReset();
+      }
+
       return _explain(e);
     } catch (e) {
       return '$e';
+    }
+  }
+
+  /// Fetches a setup token and moves to the "set a new PIN" screen.
+  Future<String?> _startPinReset() async {
+    try {
+      final response = await _api.requestPinSetupToken(deviceId: _state!.deviceId!);
+
+      setState(() {
+        _enrollment = EnrollmentResult(
+          deviceId: _state!.deviceId!,
+          setupToken: response['pin_setup_token'] as String,
+          chainLength: 0,
+          strongBox: false,
+        );
+        _error = null;
+        _step = _Step.needsPin;
+      });
+
+      // Whatever was sealed for fingerprint unlock belongs to a session the
+      // reset revoked, so it can never be opened into anything usable.
+      await _lock!.disableBiometric();
+      if (mounted) setState(() => _biometricUsable = false);
+
+      return null;
+    } on ApiException catch (e) {
+      return _explain(e);
     }
   }
 
@@ -371,6 +415,8 @@ class _EnrollScreenState extends State<EnrollScreen> {
   /// The server sends English developer text and expects the app to branch on
   /// the code, so nothing here shows `message` to a driver directly.
   String _explain(ApiException e) => switch (e.code) {
+        'E_PIN_RESET_REQUIRED' => 'เจ้าหน้าที่รีเซ็ต PIN ให้แล้ว กรุณาตั้ง PIN ใหม่',
+        'E_PIN_ALREADY_SET' => 'เครื่องนี้ตั้ง PIN ไว้แล้ว',
         // Never tells a driver to enroll again over a typo — that means a trip
         // back to staff for a new activation code.
         'E_PIN_INVALID' => switch (e.details['attempts_remaining']) {
@@ -445,6 +491,23 @@ class _EnrollScreenState extends State<EnrollScreen> {
       );
     }
 
+    // After the integrity screen, before the lock. A driver whose version the
+    // API will refuse cannot get past this; anyone else may put it off until
+    // the next launch.
+    final update = _update;
+
+    if (update != null && !_updateSkipped && _step != _Step.loading) {
+      final mandatory = update.forces(int.parse(ApiConfig.appVersion));
+
+      return UpdateScreen(
+        manifest: update,
+        installer: const UpdateInstaller(),
+        mandatory: mandatory,
+        onSkip: mandatory ? null : () => setState(() => _updateSkipped = true),
+      );
+    }
+
+
     // Replaces the whole scaffold rather than sitting inside it: the app bar
     // carries a button that clears the device key, which must not be reachable
     // before the driver has unlocked.
@@ -497,7 +560,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
           ),
         _Step.needsEnrollment => _intro(),
         _Step.needsPin => PinEntry(
-            title: 'Set a 6-digit PIN',
+            title: 'ตั้งรหัส PIN 6 หลัก',
             onSubmit: _setPin,
             error: _error,
           ),

@@ -69,6 +69,14 @@ class ApiClient {
     );
   }
 
+  /// Asks for a fresh PIN setup token after staff reset the PIN.
+  ///
+  /// Only answered while the device is waiting for one, and only to a request
+  /// signed by that device's key — the key a reset does not touch.
+  Future<Map<String, dynamic>> requestPinSetupToken({required String deviceId}) {
+    return _send('POST', '/api/v1/devices/$deviceId/pin/setup-token', const {});
+  }
+
   Future<Map<String, dynamic>> setPin({
     required String deviceId,
     required String setupToken,

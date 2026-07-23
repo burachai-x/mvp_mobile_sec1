@@ -32,10 +32,11 @@ class UpdateState {
 
   /// Records a manifest that passed every check.
   Future<void> accept(UpdateManifest manifest) async {
-    if (manifest.sequence <= sequence) {
+    if (manifest.sequence < sequence) {
       // The verifier already refuses these; this is here so a future caller
-      // cannot walk the counter backwards by accident.
-      throw ArgumentError.value(manifest.sequence, 'sequence', 'Must exceed $sequence.');
+      // cannot walk the counter backwards by accident. Equal is allowed: the
+      // same manifest arrives on every launch until it is replaced.
+      throw ArgumentError.value(manifest.sequence, 'sequence', 'Must not precede $sequence.');
     }
 
     await _prefs.setInt(_sequenceKey, manifest.sequence);

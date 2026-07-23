@@ -8,9 +8,9 @@ use App\Http\Support\ApiError;
 use App\Models\AuditLog;
 use App\Models\Device;
 use App\Support\DeviceTokens;
+use App\Support\PinSetupToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
@@ -59,11 +59,7 @@ final class PinController
             );
         }
 
-        // pull() makes it single-use: a leaked setup token cannot be replayed to
-        // overwrite the PIN later.
-        $expected = Cache::pull("pin_setup:{$deviceId}");
-
-        if (! is_string($expected) || ! hash_equals($expected, hash('sha256', $data['pin_setup_token']))) {
+        if (! PinSetupToken::consume($deviceId, $data['pin_setup_token'])) {
             return ApiError::deviceSignatureInvalid($request);
         }
 
@@ -106,9 +102,26 @@ final class PinController
             ]);
         }
 
-        $device = Device::query()->whereKey($data['device_id'])->where('status', 'active')->first();
+        $device = Device::query()->whereKey($data['device_id'])->first();
 
         if ($device === null) {
+            return ApiError::deviceSignatureInvalid($request);
+        }
+
+        // Staff reset the PIN and the driver has not set a new one yet. Saying
+        // so lets the app take them to the "set a new PIN" screen; the old
+        // answer was indistinguishable from a broken device and sent them to
+        // re-enroll instead (§6.7).
+        if ($device->status === 'pending_pin') {
+            return ApiError::make(
+                $request,
+                'E_PIN_RESET_REQUIRED',
+                'Staff reset this PIN. Set a new one.',
+                409,
+            );
+        }
+
+        if ($device->status !== 'active') {
             return ApiError::deviceSignatureInvalid($request);
         }
 

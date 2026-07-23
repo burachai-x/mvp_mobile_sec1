@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The downloaded APK lives in the app's own files directory, not in shared
+    storage. Anything world-readable could be swapped between the moment the
+    hash is checked and the moment the installer reads it.
+-->
+<paths>
+    <files-path name="updates" path="updates/" />
+</paths>

@@ -635,6 +635,8 @@ X-App-Signature, X-App-Version
 | 403 | `E_INTEGRITY_FAILED` | root/emulator/attestation ไม่ผ่าน | แสดงหน้าเตือนความปลอดภัย ปิดแอป |
 | 401 | `E_DEVICE_SIGNATURE_INVALID` | ลายเซ็น request ไม่ตรง / nonce ซ้ำ / เวลาเพี้ยน | ล้าง session ให้ผู้ใช้ enroll ใหม่ |
 | 401 | `E_PIN_INVALID` | PIN ผิด (มี `attempts_remaining`) | ให้ลองใหม่ **ห้ามสั่ง enroll ใหม่** |
+| 409 | `E_PIN_RESET_REQUIRED` | เจ้าหน้าที่รีเซ็ต PIN แล้ว | ขอ setup token แล้วพาไปตั้ง PIN ใหม่ |
+| 409 | `E_PIN_ALREADY_SET` | ขอ setup token ทั้งที่เครื่อง `active` | ไม่ต้องทำอะไร |
 | 401 | `E_TOKEN_EXPIRED` | access token หมดอายุ | เรียก refresh |
 | 401 | `E_DEVICE_REVOKED` | เจ้าหน้าที่ลบ/เพิกถอนเครื่อง | ล้างข้อมูลในเครื่อง |
 | 409 | `E_ACTIVATION_CODE_USED` | code ถูกใช้แล้ว / หมดอายุ / ถูกเพิกถอน | ขอ code ใหม่จากเจ้าหน้าที่ |

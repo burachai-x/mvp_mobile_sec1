@@ -76,6 +76,28 @@ class MainActivity : FlutterFragmentActivity() {
                         "biometricSeal" ->
                             result.success(BiometricVault.seal(call.argument<String>("secret") ?: ""))
 
+                        "apkSigningCertificate" -> result.success(
+                            ApkInstaller.signingCertificateSha256(
+                                applicationContext,
+                                call.argument<String>("path") ?: "",
+                            )
+                        )
+
+                        "ownSigningCertificate" ->
+                            result.success(ApkInstaller.ownSigningCertificateSha256(applicationContext))
+
+                        "canInstallPackages" -> result.success(ApkInstaller.canInstall(applicationContext))
+
+                        "openInstallPermission" -> {
+                            ApkInstaller.openInstallPermissionSettings(this)
+                            result.success(null)
+                        }
+
+                        "installApk" -> {
+                            ApkInstaller.install(applicationContext, call.argument<String>("path") ?: "")
+                            result.success(null)
+                        }
+
                         "biometricUnlock" -> BiometricVault.unlock(
                             this,
                             call.argument<String>("sealed") ?: "",

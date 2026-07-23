@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Http\Controllers\Api\EnrollController;
 use App\Http\Controllers\Api\IntegrityController;
 use App\Http\Controllers\Api\PinController;
+use App\Http\Controllers\Api\PinSetupTokenController;
 use App\Http\Controllers\Api\RefreshController;
 use App\Http\Middleware\AuthenticateDevice;
 use App\Http\Middleware\EnforceMinAppVersion;
@@ -33,6 +34,11 @@ Route::prefix('api/v1')
 
         // Signed with the key from enrollment, which is what proves the caller
         // is the device that just enrolled.
+        // Lets a device that staff reset ask for a new setup token. Without it a
+        // reset left the device stuck in pending_pin for good (§6.7).
+        Route::post('devices/{deviceId}/pin/setup-token', PinSetupTokenController::class)
+            ->middleware([VerifyDeviceSignature::class, 'throttle:pin-setup']);
+
         Route::post('devices/{deviceId}/pin', [PinController::class, 'store'])
             ->middleware([VerifyDeviceSignature::class, 'throttle:pin-setup']);
 

@@ -12,11 +12,10 @@ use App\Models\IntegrityReport;
 use App\Support\ActivationToken;
 use App\Support\AttestationVerifier;
 use App\Support\Crypto\Hasher;
+use App\Support\PinSetupToken;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
@@ -146,27 +145,12 @@ final class EnrollController
             return $device;
         });
 
-        $setupToken = $this->issuePinSetupToken($device);
-
         return response()->json([
             'device_id' => $device->getKey(),
             'status' => 'pending_pin',
-            'pin_setup_token' => $setupToken,
-            'expires_at' => now()->addMinutes(10)->toIso8601String(),
+            'pin_setup_token' => PinSetupToken::issue($device),
+            'expires_at' => PinSetupToken::expiresAt(),
         ], 201);
-    }
-
-    /**
-     * Short-lived and single-use, held in Valkey rather than a column: it exists
-     * for ten minutes and leaving spent tokens in the database buys nothing.
-     */
-    private function issuePinSetupToken(Device $device): string
-    {
-        $token = Str::random(48);
-
-        Cache::put("pin_setup:{$device->getKey()}", hash('sha256', $token), now()->addMinutes(10));
-
-        return $token;
     }
 
     /**

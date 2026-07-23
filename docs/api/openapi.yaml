@@ -204,6 +204,50 @@ paths:
         '429': { $ref: '#/components/responses/RateLimited' }
       x-rate-limit: 10 ครั้ง/ชั่วโมง ต่อ IP และ 5 ครั้ง/ชั่วโมง ต่อ activation code
 
+  /devices/{deviceId}/pin/setup-token:
+    post:
+      tags: [auth]
+      summary: ขอ token สำหรับตั้ง PIN ใหม่ หลังเจ้าหน้าที่รีเซ็ต
+      description: |
+        ใช้เมื่อเจ้าหน้าที่รีเซ็ต PIN แล้วเครื่องอยู่สถานะ `pending_pin`
+
+        **มีเพราะการรีเซ็ต PIN เดิมทำไม่จบ** — เดิม `pin_setup_token` ออกได้ที่เดียว
+        คือตอน enroll พอเจ้าหน้าที่กดรีเซ็ต เครื่องจะค้างที่ `pending_pin` ตลอดไป
+        ตั้ง PIN ใหม่ไม่ได้ ปลดล็อกไม่ได้ ต้องลบเครื่องแล้ว enroll ใหม่ ซึ่งขัดกับ PRD §6.7
+
+        สิ่งที่ยืนยันตัวตนคือ **ลายเซ็นอุปกรณ์** — key อยู่ใน TEE และการรีเซ็ตไม่แตะต้อง
+        จึงมีแต่เครื่องเดิมที่ขอได้ ส่วน `pending_pin` เป็นตัวบอกว่ากำลังรอตั้ง PIN อยู่จริง
+        เครื่องที่ `active` จะถูกปฏิเสธ (`E_PIN_ALREADY_SET`) เพื่อไม่ให้ใครที่ถือเครื่อง
+        ที่ปลดล็อกอยู่แล้วเปลี่ยน PIN โดยไม่รู้ของเดิม
+      security:
+        - appSignature: []
+          deviceSignature: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XTimestamp'
+        - $ref: '#/components/parameters/XNonce'
+      responses:
+        '200':
+          description: ได้ token ใหม่ อายุ 10 นาที ใช้ได้ครั้งเดียว
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pin_setup_token: { type: string }
+                  expires_at: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/UnauthorizedDevice' }
+        '409':
+          description: เครื่องนี้ไม่ได้รอตั้ง PIN (`E_PIN_ALREADY_SET`)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+      x-rate-limit: 5 ครั้ง/ชั่วโมง ต่ออุปกรณ์
+
   /devices/{deviceId}/pin:
     post:
       tags: [enrollment]
@@ -948,6 +992,8 @@ components:
         - E_INTEGRITY_FAILED
         - E_DEVICE_SIGNATURE_INVALID
         - E_PIN_INVALID
+        - E_PIN_RESET_REQUIRED
+        - E_PIN_ALREADY_SET
         - E_TOKEN_EXPIRED
         - E_DEVICE_REVOKED
         - E_ACTIVATION_CODE_USED

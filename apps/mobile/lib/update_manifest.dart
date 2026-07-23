@@ -220,12 +220,19 @@ class ManifestVerifier {
       throw UpdateRefused(UpdateRejection.expired, manifest.expiresAt.toIso8601String());
     }
 
-    // Check 3. Signatures stay valid forever, so an old manifest replayed later
-    // would otherwise be accepted on its own merits.
-    if (manifest.sequence <= lastSequence) {
+    // Check 3. Signatures stay valid forever, so an *older* manifest replayed
+    // later would otherwise be accepted on its own merits.
+    //
+    // Strictly older, not "not newer". The same manifest is served on every
+    // launch — that is the normal case, not an attack, and it carries the same
+    // instructions either way. Refusing equality meant an update could be
+    // offered exactly once and never again: the sequence was recorded the first
+    // time the manifest was seen, so the next launch rejected it as a replay
+    // and the driver never got another chance to install.
+    if (manifest.sequence < lastSequence) {
       throw UpdateRefused(
         UpdateRejection.replayedSequence,
-        '${manifest.sequence} <= $lastSequence',
+        '${manifest.sequence} < $lastSequence',
       );
     }
 

@@ -147,12 +147,12 @@ void main() {
   /// Check 3 — signatures never expire on their own, so an old manifest replayed
   /// later verifies perfectly well.
   group('sequence (check 3)', () {
-    test('a sequence already seen is refused', () {
-      expect(
-        () => _verify(_document(), lastSequence: 5),
-        throwsA(predicate((e) =>
-            e is UpdateRefused && e.reason == UpdateRejection.replayedSequence)),
-      );
+    /// The same manifest is served on every launch, so seeing it again is the
+    /// normal case. Refusing it meant an update could be offered once and never
+    /// again — the sequence was recorded on first sight, and the next launch
+    /// called the same file a replay.
+    test('the same sequence is accepted again', () {
+      expect(() => _verify(_document(), lastSequence: 5), returnsNormally);
     });
 
     test('an older sequence is refused', () {
