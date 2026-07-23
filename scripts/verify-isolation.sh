@@ -80,9 +80,13 @@ $DC exec -T api    sh -c 'nc -z -w2 postgres 5432' >/dev/null 2>&1 && pass "api 
 echo
 echo "== ชั้น 4: route ที่ลงทะเบียนจริง =="
 api_staff=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://localhost:${API_PORT:-8080}/staff" || echo 000)
-api_health=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://localhost:${API_PORT:-8080}/api/v1/health" || echo 000)
+# ส่ง X-App-Signature ไปด้วย: เมื่อ allowlist ถูกตั้งค่าแล้ว route นี้จะตอบ 403
+# ทั้งที่ลงทะเบียนอยู่จริง ซึ่งเป็นคนละเรื่องกับที่สคริปต์นี้ตรวจ — ที่ตรวจคือ
+# แต่ละ container ลงทะเบียน route ของ role ตัวเองเท่านั้น (ADR 0007)
+api_sig=$(printf '%s' "${APP_SIGNATURE_SHA256_ALLOWLIST:-}" | cut -d, -f1)
+api_health=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -H "X-App-Signature: ${api_sig}" "http://localhost:${API_PORT:-8080}/api/v1/health" || echo 000)
 portal_login=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://localhost:${STAFF_PORT:-8081}/staff/login" || echo 000)
-portal_api=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://localhost:${STAFF_PORT:-8081}/api/v1/health" || echo 000)
+portal_api=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -H "X-App-Signature: ${api_sig}" "http://localhost:${STAFF_PORT:-8081}/api/v1/health" || echo 000)
 
 [ "$api_staff"    = "404" ] && pass "api /staff = 404"              || bad "api /staff = $api_staff (ต้อง 404)"
 [ "$api_health"   = "200" ] && pass "api /api/v1/health = 200"      || bad "api /api/v1/health = $api_health"
