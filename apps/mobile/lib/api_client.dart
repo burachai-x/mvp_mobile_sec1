@@ -29,12 +29,17 @@ class ApiClient {
     required this.appSignature,
     required this.appVersion,
     CertificatePins? pins,
+    this.securityContext,
   }) : pins = pins ?? CertificatePins.disabled();
 
   final String baseUrl;
   final String appSignature;
   final String appVersion;
   final CertificatePins pins;
+
+  /// Extra trust anchors for the handshake. Null uses the system roots, which
+  /// is what every real build does.
+  final SecurityContext? securityContext;
 
   final _random = Random.secure();
 
@@ -163,7 +168,7 @@ class ApiClient {
   HttpClient _client() {
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
 
-    if (!pins.isEnabled) return client;
+    if (!pins.isEnabled && securityContext == null) return client;
 
     client.connectionFactory = (uri, proxyHost, proxyPort) async {
       // Pins configured against a cleartext URL is a build mistake, and the
@@ -179,6 +184,7 @@ class ApiClient {
       final task = await SecureSocket.startConnect(
         uri.host,
         uri.port,
+        context: securityContext,
         // Chain and hostname are still validated against the system trust
         // store. Pinning narrows what is accepted; it does not replace it.
         onBadCertificate: (_) => false,

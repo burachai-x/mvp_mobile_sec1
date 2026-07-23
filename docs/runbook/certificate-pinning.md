@@ -77,8 +77,21 @@ dart run tool/check_pin.dart <ip> 8443 ../../docker/nginx/dev-tls/dev-ca.crt <pi
 และถ้าไม่เชื่อ CA จะ **`HandshakeException` ตั้งแต่ก่อนถึงขั้นตรวจ pin**
 เคสที่สามคือหลักฐานว่า pinning ไม่ได้แทนที่การตรวจ chain แต่ซ้อนทับลงไป
 
-debug build เชื่อ CA ของ dev ผ่าน `network_security_config.xml`
-(`apps/mobile/android/app/src/debug/res/raw/dev_ca.crt`) — release build ไม่เห็นไฟล์นี้
+### 🔴 `network_security_config.xml` ใช้กับ Flutter ไม่ได้
+
+**Flutter ไม่ได้ใช้ network stack ของ Android** — `dart:io` คุยกับ BoringSSL ของตัวเองโดยตรง
+และ**ไม่เคยอ่าน `network_security_config.xml`** trust anchor ที่ประกาศไว้ในไฟล์นั้นจึงถูกมองข้ามทั้งหมด
+(เจอตอนทดสอบบนเครื่องจริง: ไฟล์ตั้งถูก Android อ่านจริง แต่แอปยัง
+`CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate`)
+
+CA ของ dev ต้องส่งเข้า `SecurityContext` ผ่าน build flag แทน:
+
+```bash
+--dart-define=API_DEV_TRUSTED_CA=$(base64 -w0 docker/nginx/dev-tls/dev-ca.crt)
+```
+
+**ห้ามใช้กับ release** — ถ้าตั้งค่านี้ใน release build แอปจะโยน `StateError` ทันที
+สวิตช์ที่ขยายว่าใครปลอมเป็น API ได้บ้าง ต้องส่งขึ้น production ไม่ได้ ไม่ใช่แค่ "อย่าลืมเอาออก"
 
 ---
 

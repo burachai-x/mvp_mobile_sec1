@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+
 import 'certificate_pins.dart';
 
 /// Build-time configuration.
@@ -45,5 +50,29 @@ class ApiConfig {
       // up until it locks the fleet out (§7).
       expiry: DateTime.parse(_pinExpiry),
     );
+  }
+
+  /// A base64 PEM trusted **in addition to** the system roots.
+  ///
+  /// Exists because Flutter does not use Android's network stack: dart:io talks
+  /// to BoringSSL directly and never reads `network_security_config.xml`, so a
+  /// trust anchor declared there is silently ignored. Testing against a dev CA
+  /// therefore has to happen in code.
+  static const _devTrustedCa = String.fromEnvironment('API_DEV_TRUSTED_CA');
+
+  /// The context connections are made with, or null for the default roots.
+  ///
+  /// Throws in a release build rather than trusting an extra CA: a switch that
+  /// widens who may impersonate the API must not be shippable, and the whole
+  /// point of pinning is to narrow that set.
+  static SecurityContext? securityContext() {
+    if (_devTrustedCa.isEmpty) return null;
+
+    if (kReleaseMode) {
+      throw StateError('API_DEV_TRUSTED_CA is set in a release build.');
+    }
+
+    return SecurityContext(withTrustedRoots: true)
+      ..setTrustedCertificatesBytes(base64.decode(_devTrustedCa));
   }
 }
