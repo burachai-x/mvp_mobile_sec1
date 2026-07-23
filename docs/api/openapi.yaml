@@ -24,14 +24,15 @@ info:
     | | `api` | `portal` |
     | --- | --- | --- |
     | host | `api.example` | `staff.example` (จำกัด IP / VPN) |
-    | tag ใน spec นี้ | `enrollment` `auth` `integrity` `system` | `admin` `pii` `retention` |
+    | อยู่ใน spec นี้ | ✅ endpoint สำหรับแอปคนขับ | ❌ เป็นหน้าเว็บ Filament ไม่ใช่ API |
     | `DOCUMENT_KEK` | **ไม่มี** | มี |
     | ต่อ Garage | **ไม่ได้** | ได้ |
 
     โค้ดเบสเดียวกัน แยกด้วย `APP_ROLE` — route ของอีกฝั่ง **ไม่ถูกลงทะเบียนเลย** จึงได้ `404` (ADR 0007)
 
-    Staff Portal เป็น server-rendered (`/staff`) ใช้ session cookie ไม่ได้อยู่ใน spec นี้
-    ยกเว้น endpoint ใต้ tag `admin` / `pii` / `retention` ซึ่งเป็น JSON endpoint ที่ portal เรียกเอง
+    **Staff Portal ไม่มี REST API** — ทำด้วย Filament (Livewire) งานเจ้าหน้าที่ทั้งหมด
+    (ทะเบียนคนขับ, ออก activation code, ลบ/กู้คืนอุปกรณ์, ดู PII แบบ step-up PIN, retention)
+    เป็น action ในหน้าเว็บ `/staff/*` ไม่ใช่ endpoint spec นี้จึงมีเฉพาะ API ของแอปคนขับ 7 เส้น
 
     ## Header ที่ทุก request จากแอปต้องแนบ
     | header | ความหมาย | ชั้นความเชื่อถือ |
@@ -68,14 +69,6 @@ tags:
     description: |
       กลไกอัปเดตแอปแบบ sideload — **ไม่อยู่ใต้ `/api/v1`** เพราะแอปทุกเวอร์ชันต้องเรียกได้
       รวมถึงเวอร์ชันที่เก่าเกินกว่าจะคุยกับ API ปัจจุบันแล้ว
-  - name: admin
-    description: endpoint ที่ Staff Portal เรียก (session cookie + CSRF)
-  - name: pii
-    description: |
-      เข้าถึงข้อมูลส่วนบุคคล — ต้องมีสิทธิ์ **และ** ยกระดับสิทธิ์ด้วย PIN ก่อนเสมอ
-      ทุกการเรียกถูกบันทึกลง `audit_logs` แยกรายครั้ง
-  - name: retention
-    description: ตั้งค่าระยะเวลาเก็บข้อมูล (ผู้ดูแลระบบ)
 
 paths:
 
@@ -194,7 +187,7 @@ paths:
             `E_ACTIVATION_CODE_USED` — code ถูกใช้แล้ว หมดอายุ หรือถูกเพิกถอน
 
             `E_DRIVER_HAS_ACTIVE_DEVICE` — คนขับคนนี้มีเครื่องใช้งานอยู่แล้ว (กฎ 1:1)
-            ต้องให้เจ้าหน้าที่ลบเครื่องเก่าก่อน (`/admin/devices/{id}/revoke`)
+            ต้องให้เจ้าหน้าที่ลบเครื่องเก่าก่อน (หน้า `/staff/devices`)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -450,460 +443,22 @@ paths:
         '401': { $ref: '#/components/responses/UnauthorizedDevice' }
         '403': { $ref: '#/components/responses/ForbiddenIntegrity' }
 
-  /admin/drivers:
-    post:
-      tags: [admin]
-      summary: เจ้าหน้าที่บันทึกคนขับเข้าระบบ (หลังอนุมัติเอกสารกระดาษแล้ว)
-      description: |
-        **การอนุมัติเกิดขึ้นบนกระดาษก่อนเรียก endpoint นี้** — คนขับยื่นใบสมัคร +
-        สำเนาบัตรประชาชน + สำเนาใบขับขี่ เจ้าหน้าที่ตรวจแล้วถ้าอนุมัติจึงมาบันทึก
-
-        คนขับที่สร้างได้ `status = active` ทันที ไม่มีสถานะรออนุมัติ
-        `created_by` คือหลักฐานว่าเจ้าหน้าที่คนไหนเป็นผู้อนุมัติและบันทึก
-
-        รับเป็น **`multipart/form-data`** เพราะต้องแนบเอกสารมาพร้อมกัน
-        ไฟล์ถูกส่งขึ้น **Garage** (object storage) — ห้ามลงดิสก์ของ container
-
-        เขียน `audit_logs`: `driver.created` + `document.uploaded` ต่อไฟล์ ใน transaction เดียวกัน
-
-        ดู `docs/architecture.md` §6.1 และ §8
-      security:
-        - adminSession: []
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              allOf:
-                - $ref: '#/components/schemas/DriverInput'
-                - type: object
-                  required: [application_form, national_id_copy, driver_license_copy]
-                  properties:
-                    application_form:
-                      type: string
-                      format: binary
-                      description: ใบสมัคร
-                    national_id_copy:
-                      type: string
-                      format: binary
-                      description: สำเนาบัตรประชาชน
-                    driver_license_copy:
-                      type: string
-                      format: binary
-                      description: สำเนาใบขับขี่
-            encoding:
-              application_form: { contentType: 'image/jpeg, image/png, application/pdf' }
-              national_id_copy: { contentType: 'image/jpeg, image/png, application/pdf' }
-              driver_license_copy: { contentType: 'image/jpeg, image/png, application/pdf' }
-      responses:
-        '201':
-          description: สร้างแล้ว — นำ `id` ไปผูกกับ activation code ในขั้นถัดไป
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  id: { type: string, format: uuid }
-                  full_name: { type: string }
-                  national_id_masked:
-                    type: string
-                    example: "x-xxxx-xxxxx-x4-5"
-                    description: |
-                      **คืนเป็นค่า mask เสมอ** แสดงเต็มได้เฉพาะเมื่อมีสิทธิ์
-                      และต้องเขียน `audit_logs` (`driver.pii_viewed`) ทุกครั้ง
-                  status: { type: string, enum: [active] }
-                  documents:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id: { type: string, format: uuid }
-                        type: { type: string, enum: [application_form, national_id_copy, driver_license_copy] }
-                        sha256: { type: string }
-                    description: '**ไม่คืน `object_key`** — ดาวน์โหลดผ่าน endpoint `/download` ที่ต้องใส่ PIN เท่านั้น'
-        '401': { description: ยังไม่ได้ล็อกอิน }
-        '409':
-          description: เลขบัตรประชาชนหรือรหัสพนักงานนี้มีอยู่แล้ว (`E_DRIVER_ALREADY_EXISTS`)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-        '415':
-          description: ชนิดไฟล์ไม่ได้รับอนุญาต — ตรวจจาก magic bytes ไม่ใช่จาก header หรือนามสกุล
-        '422': { description: ไฟล์ใหญ่เกินกำหนด (10 MB ต่อไฟล์) }
-      x-rate-limit: 120 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่
-
-  /admin/session/elevate:
-    post:
-      tags: [pii]
-      summary: ยกระดับสิทธิ์ด้วย PIN (step-up authentication)
-      description: |
-        ต้องเรียกก่อนดูข้อมูลส่วนบุคคลแบบเต็มหรือดาวน์โหลดเอกสาร
-
-        `pin` คือ **PIN สำหรับเข้าถึงข้อมูล คนละตัวกับรหัสผ่านล็อกอิน** (`staff.data_access_pin_hash`)
-        การมี PIN อย่างเดียวไม่พอ — บัญชีต้องมีสิทธิ์ `can_view_pii` หรือ `can_download_documents` ด้วย
-
-        สำเร็จแล้วได้ **elevated session อายุ 10 นาที** ใช้เรียก endpoint ที่ต้องยกระดับสิทธิ์ได้หลายครั้ง
-        โดย **ทุกครั้งที่เรียกยังถูกบันทึกแยกรายการเสมอ** ไม่ใช่บันทึกแค่ตอนใส่ PIN
-
-        เหตุผลที่ไม่บังคับใส่ PIN ทุกครั้ง: เจ้าหน้าที่ที่ต้องเปิดเอกสาร 3 ไฟล์ของคนเดียวกัน
-        จะต้องพิมพ์ PIN 3 รอบ ซึ่งนำไปสู่การจดรหัสแปะไว้ข้างจอ
-        ถ้าต้องการเข้มกว่านี้ ตั้ง TTL = 0 ได้โดยไม่ต้องแก้ contract
-
-        ผิด PIN 5 ครั้งติด → ล็อก 15 นาที (`423`) และแจ้งเตือนผู้ดูแล
-      security:
-        - adminSession: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [pin, reason]
-              properties:
-                pin:
-                  type: string
-                  pattern: '^[0-9]{6}$'
-                  description: '**ห้าม log ค่านี้ไม่ว่ากรณีใด**'
-                reason:
-                  type: string
-                  maxLength: 255
-                  description: |
-                    **บังคับกรอก** เหตุผลที่ต้องเข้าถึงข้อมูล — ถูกบันทึกลง `audit_logs`
-                    ทำให้การเปิดดูโดยไม่มีเหตุอันควรเป็นเรื่องที่ต้องอธิบายภายหลัง
-      responses:
-        '201':
-          description: ยกระดับสิทธิ์แล้ว
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  elevation_id:
-                    type: string
-                    format: uuid
-                    description: ผูกกับทุก audit record ที่เกิดภายใต้การยกระดับครั้งนี้
-                  expires_at: { type: string, format: date-time }
-                  scopes:
-                    type: array
-                    items: { type: string, enum: [view_pii, download_documents] }
-                    description: ได้เฉพาะ scope ที่บัญชีมีสิทธิ์อยู่แล้ว
-        '401': { description: PIN ไม่ถูกต้อง — ตอบเหมือนกันทุกกรณีที่ล้มเหลว }
-        '403': { description: บัญชีไม่มีสิทธิ์เข้าถึงข้อมูลส่วนบุคคลเลย }
-        '423':
-          description: PIN ถูกล็อกชั่วคราว (`E_PIN_LOCKED`)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-      x-rate-limit: 10 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่
-
-  /admin/drivers/{driverId}/reveal:
-    post:
-      tags: [pii]
-      summary: ขอดูข้อมูลส่วนบุคคลแบบเต็ม (ไม่ mask)
-      description: |
-        ปกติ API คืนข้อมูลคนขับแบบ **mask** เสมอ endpoint นี้คือทางเดียวที่จะเห็นค่าเต็ม
-
-        ต้องมี **elevated session** ที่ยังไม่หมดอายุ (`/admin/session/elevate`) และสิทธิ์ `can_view_pii`
-
-        **การ mask ต้องทำที่ชั้น serialization ของ API ไม่ใช่ที่ frontend** —
-        ถ้า mask ที่ frontend แปลว่าข้อมูลเต็มถูกส่งออกไปแล้ว ใครเปิด devtools ก็เห็น เท่ากับไม่ได้ mask
-
-        เขียน `audit_logs` (`driver.pii_viewed`) **ทุกครั้งที่เรียก** พร้อม `fields`, `reason`, `elevation_id`
-
-        ใช้ `POST` เพราะการเรียกนี้สร้าง audit record จึงไม่ใช่ operation ที่ปลอดผลข้างเคียง
-      security:
-        - adminSession: []
-          elevatedSession: []
-      parameters:
-        - $ref: '#/components/parameters/DriverId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [fields]
-              properties:
-                fields:
-                  type: array
-                  minItems: 1
-                  items:
-                    type: string
-                    enum: [national_id, phone, license_number]
-                  description: ขอเฉพาะ field ที่จำเป็นจริง — ขอเผื่อไว้ทั้งหมดจะปรากฏใน audit
-      responses:
-        '200':
-          description: ค่าเต็มของ field ที่ขอ
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  national_id: { type: string }
-                  phone: { type: string }
-                  license_number: { type: string }
-        '401': { description: ยังไม่ได้ล็อกอิน }
-        '403':
-          description: |
-            ไม่มีสิทธิ์ `can_view_pii` **หรือ** ยังไม่ได้ยกระดับสิทธิ์ / elevated session หมดอายุ
-            (`E_ELEVATION_REQUIRED`)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-        '404': { description: ไม่พบคนขับ }
-        '410': { description: ข้อมูลถูกลบตาม retention แล้ว (`anonymized_at` ไม่ว่าง) }
-      x-rate-limit: 60 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่ — แจ้งเตือนเมื่อดูเกิน 20 คนใน 10 นาที
-
-  /admin/drivers/{driverId}/documents/{documentId}/download:
-    post:
-      tags: [pii]
-      summary: ดาวน์โหลดเอกสารคนขับ (ถอดรหัสฝั่ง server)
-      description: |
-        ต้องมี **elevated session** และสิทธิ์ `can_download_documents`
-
-        **ไม่ใช้ presigned URL** — เปลี่ยนจากการตัดสินใจเดิมใน ADR 0004 เพราะ
-        1. ไฟล์ใน Garage เป็น **ciphertext** ผู้ใช้เปิดไม่ออก การถอดรหัสต้องเกิดฝั่ง server เพราะ KEK อยู่ที่นั่น
-        2. presigned URL ใช้ซ้ำได้จนหมดอายุ → บังคับ PIN ต่อครั้งไม่ได้ และนับจำนวนการดาวน์โหลดจริงไม่ได้
-
-        การทำงาน: ตรวจสิทธิ์ → ตรวจ elevated session → เขียน audit → ดึง ciphertext จาก Garage
-        → แกะ DEK ด้วย KEK → ถอดรหัส **แบบ stream ทีละ chunk** → ส่งต่อ
-
-        **ห้ามโหลดทั้งไฟล์เข้า memory** และให้ route นี้อยู่ใน php-fpm pool แยก
-        เพื่อไม่ให้แย่ง worker กับ API หลัก (ดู ADR 0005)
-
-        เขียน `audit_logs` (`document.viewed`) ทุกครั้ง พร้อม `document_id`, `reason`, `elevation_id`
-      security:
-        - adminSession: []
-          elevatedSession: []
-      parameters:
-        - $ref: '#/components/parameters/DriverId'
-        - name: documentId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      responses:
-        '200':
-          description: |
-            เนื้อไฟล์ที่ถอดรหัสแล้ว
-            ต้องส่ง `Content-Disposition: attachment` และ `Cache-Control: no-store`
-          content:
-            application/octet-stream:
-              schema: { type: string, format: binary }
-        '401': { description: ยังไม่ได้ล็อกอิน }
-        '403': { description: 'ไม่มีสิทธิ์ หรือยังไม่ได้ยกระดับสิทธิ์ (`E_ELEVATION_REQUIRED`)' }
-        '404': { description: ไม่พบเอกสาร }
-        '410':
-          description: |
-            เอกสารถูกทำลายตาม retention แล้ว (`destroyed_at` ไม่ว่าง)
-            DEK ถูกลบ → ciphertext ที่เหลือถอดไม่ได้ตลอดกาล (crypto-shredding, §10.3)
-      x-rate-limit: 30 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่ — **เกินกว่านี้คือสัญญาณของการดูดข้อมูล ต้องแจ้งเตือน**
-
-  /admin/retention-policies:
-    get:
-      tags: [retention]
-      summary: ดูค่า retention ปัจจุบัน
-      description: อ่านได้ทุก role — แก้ได้เฉพาะ `admin`
-      security:
-        - adminSession: []
-      responses:
-        '200':
-          description: รายการนโยบายทั้งหมด
-          content:
-            application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/RetentionPolicy' }
-        '401': { description: ยังไม่ได้ล็อกอิน }
-
-    put:
-      tags: [retention]
-      summary: แก้ค่า retention (ผู้ดูแลระบบเท่านั้น)
-      description: |
-        หน้าจอนี้ลบข้อมูลถาวรได้ — พิมพ์ `3` แทน `30` แล้วข้อมูลคนขับเกือบทั้งหมดหายและ **กู้คืนไม่ได้**
-        เพราะการลบใช้ crypto-shredding
-
-        ตัวกันพลาดขั้นต่ำใน MVP
-        1. **validate ช่วงตัวเลขในโค้ด** (เสนอ 7–3650 วัน) → นอกช่วงตอบ `422`
-        2. role `admin` เท่านั้น **และต้องมี elevated session** (ใส่ PIN)
-        3. เขียน `audit_logs` พร้อมค่าเก่าและค่าใหม่
-
-        ดู `docs/architecture.md` §10.2
-      security:
-        - adminSession: []
-          elevatedSession: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [key, value_days]
-              properties:
-                key:
-                  type: string
-                  enum:
-                    - activity_log_days
-                    - integrity_report_days
-                    - driver_data_after_termination_days
-                    - document_after_termination_days
-                    - pii_access_log_days
-                value_days: { type: integer, minimum: 7, maximum: 3650 }
-      responses:
-        '200':
-          description: บันทึกและมีผลทันที
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/RetentionPolicy' }
-        '401': { description: ยังไม่ได้ล็อกอิน }
-        '403': { description: 'ไม่ใช่ role `admin` หรือยังไม่ได้ยกระดับสิทธิ์' }
-        '422':
-          description: |
-            ค่าอยู่นอกช่วง min/max ที่อนุญาต (`E_RETENTION_OUT_OF_RANGE`)
-            **ช่วงนี้กำหนดในโค้ด ผู้ดูแลแก้ไม่ได้**
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-
-  /admin/activation-codes:
-    post:
-      tags: [admin]
-      summary: ออก Activation Code + QR
-      description: |
-        `qr_payload` เป็น JWT ลงนามด้วย **ES256** (asymmetric)
-
-        ห้ามใช้ HS256 เพราะ shared secret จะต้องฝังอยู่ในแอป ซึ่งดึงออกมาได้
-        DB เก็บแค่ `sha256(jwt)` ไม่เก็บตัว token
-      security:
-        - adminSession: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [driver_id]
-              properties:
-                driver_id:
-                  type: string
-                  format: uuid
-                  description: |
-                    **บังคับ** — code ทุกใบต้องผูกกับคนขับที่บันทึกไว้แล้ว ไม่มี code ลอย
-
-                    ถ้าคนขับรายนี้มีอุปกรณ์ใช้งานอยู่แล้ว **ต้องปฏิเสธตั้งแต่ตรงนี้** (กฎ 1:1)
-                    ให้เจ้าหน้าที่ลบเครื่องเก่าก่อนจึงออก code ใหม่ได้
-                note:
-                  type: string
-                  maxLength: 255
-                  description: บันทึกว่าออกให้ใคร (ปรากฏใน audit log)
-                expires_in_minutes:
-                  type: integer
-                  default: 15
-                  minimum: 5
-                  maximum: 1440
-      responses:
-        '201':
-          description: สร้างสำเร็จ — **`qr_payload` แสดงได้ครั้งเดียว ไม่มีทางดูซ้ำ**
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [code, qr_payload, expires_at]
-                properties:
-                  id: { type: string, format: uuid }
-                  code:
-                    type: string
-                    example: A7K2-9QX4
-                    description: รหัสอ่านออก ตัดอักษรกำกวม 0/O และ 1/I/l ออก
-                  qr_payload: { type: string, description: JWT ES256 }
-                  expires_at: { type: string, format: date-time }
-        '401': { description: ยังไม่ได้ล็อกอิน }
-        '409':
-          description: |
-            `E_DRIVER_HAS_ACTIVE_DEVICE` — คนขับรายนี้มีอุปกรณ์ใช้งานอยู่แล้ว
-            ต้องลบเครื่องเก่าก่อน (`/admin/devices/{id}/revoke`)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Error' }
-      x-rate-limit: 60 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่
-
-  /admin/devices/{deviceId}/revoke:
-    post:
-      tags: [admin]
-      summary: '"ลบอุปกรณ์" — เพิกถอนเมื่อเครื่องหาย/เปลี่ยนเครื่อง'
-      description: |
-        เจ้าหน้าที่รับแจ้งเครื่องหายแล้วกด "ลบอุปกรณ์" ในหน้าจอ
-
-        - `status = revoked` + `revoke_reason` + `deleted_at`
-        - ยกเลิกทุก `device_sessions` ทันที
-        - เขียน `audit_logs` (`device.revoked`) ใน transaction เดียวกัน
-
-        เครื่องเก่าถ้ากลับมาออนไลน์จะได้ `401 E_DEVICE_REVOKED` แล้วล้างข้อมูลในเครื่องทิ้ง
-        จากนั้นเจ้าหน้าที่ออก activation code ใหม่ผูกกับคนขับคนเดิม — **ไม่ต้องกรอกข้อมูลคนขับใหม่**
-
-        > **🔴 หลังบ้านคือ `revoke` + soft delete ไม่ใช่ hard delete**
-        > ต้องเก็บแถวไว้เพื่อรู้ย้อนหลังว่าเครื่องที่หายเป็นของคนขับคนไหน (สำคัญถ้าเกิดเหตุระหว่างที่เครื่องหาย)
-        > และเพื่อไม่ให้ `audit_logs` ที่อ้าง `device_id` กลายเป็นตัวชี้ลอย
-        > การลบข้อมูลจริงเป็นกระบวนการ PDPA แยกที่ต้องมีการอนุมัติ
-
-        ดู `docs/architecture.md` §6.6
-      security:
-        - adminSession: []
-      parameters:
-        - $ref: '#/components/parameters/DeviceId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [reason]
-              properties:
-                reason:
-                  type: string
-                  enum: [lost, stolen, replaced, resigned, other]
-                note: { type: string, maxLength: 255 }
-      responses:
-        '204': { description: เพิกถอนแล้ว — เขียน audit log ใน transaction เดียวกัน }
-        '401': { description: ยังไม่ได้ล็อกอิน }
-        '404': { description: ไม่พบอุปกรณ์ }
-
-  /admin/devices/{deviceId}/reset-pin:
-    post:
-      tags: [admin]
-      summary: เจ้าหน้าที่รีเซ็ต PIN ให้คนขับที่ลืม
-      description: |
-        คนขับติดต่อเจ้าหน้าที่และยืนยันตัวตนด้วยบัตรประชาชน แล้วเจ้าหน้าที่กดรีเซ็ตให้
-
-        - `status = pending_pin`, `pin_hash = null`, `pin_failed_count = 0`, `pin_locked_until = null`
-        - ยกเลิกทุก `device_sessions`
-        - ออก `pin_setup_token` ใหม่ (อายุ 10 นาที)
-        - เขียน `audit_logs` (`pin.reset`) ระบุว่าเจ้าหน้าที่คนไหนรีเซ็ตให้ใคร
-
-        **ไม่ต้องลงทะเบียนเครื่องใหม่** เพราะ device keypair ยังอยู่และยังใช้ได้ — รีเซ็ตแค่ PIN
-        ใช้ปลดเครื่องที่ `blocked` จาก PIN ผิดสะสม 10 ครั้งได้ด้วย
-
-        > **ข้อควรระวัง:** endpoint นี้คือ *ทางลัดที่ข้าม PIN ได้ทั้งหมด*
-        > ถ้าบัญชีเจ้าหน้าที่หลุดหรือมีเจ้าหน้าที่ทุจริต จะรีเซ็ต PIN เครื่องใครก็ได้
-        > → บังคับ 2FA กับบัญชีเจ้าหน้าที่ + แจ้งเตือนเมื่อเจ้าหน้าที่คนเดียวรีเซ็ตถี่ผิดปกติ
-
-        ดู `docs/architecture.md` §6.7
-      security:
-        - adminSession: []
-      parameters:
-        - $ref: '#/components/parameters/DeviceId'
-      responses:
-        '200':
-          description: ออก token ใหม่แล้ว
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  pin_setup_token: { type: string }
-                  expires_at: { type: string, format: date-time }
-        '401': { description: ยังไม่ได้ล็อกอิน }
-        '404': { description: ไม่พบอุปกรณ์ }
-      x-rate-limit: 20 ครั้ง/ชั่วโมง ต่อเจ้าหน้าที่ — เกินกว่านี้ให้แจ้งเตือน
+  # ── งานเจ้าหน้าที่ ไม่ใช่ REST API ─────────────────────────────
+  #
+  # เดิม spec นี้ออกแบบ /admin/* ไว้เป็น REST API แต่ Staff Portal ทำด้วย
+  # Filament (Livewire) งานเจ้าหน้าที่ทั้งหมดจึงเป็น action ในหน้าเว็บ ไม่ใช่ endpoint
+  #   - ทะเบียนคนขับ + เอกสาร      → /staff/drivers
+  #   - ออก activation code + QR   → /staff/activation-codes
+  #   - ลบ / กู้คืน / reset PIN     → /staff/devices
+  #   - step-up PIN + ดู PII       → ในหน้า /staff/drivers เอง
+  #   - retention                  → /staff/retention-policies
+  #   - audit log                  → /staff/audit-logs
+  #
+  # portal เป็นคนละ container กับ api และ **ไม่ลงทะเบียน route /api ใดๆ**
+  # (ADR 0007) การเรียก /admin/* จึงได้ 404 ตามธรรมชาติ ยืนยันด้วย make verify-isolation
+  #
+  # ที่ตัด /admin/* ออกเพราะ "โค้ดคือความจริง" (CLAUDE.md §9) — กรณีนี้สถาปัตยกรรม
+  # เปลี่ยนไปแล้ว spec ที่โฆษณา endpoint ที่ไม่มีอยู่จริงจึงเป็นฝั่งที่ผิด
 
 components:
 
@@ -931,30 +486,11 @@ components:
         **L2 — ชั้นที่แข็ง** ECDSA P-256 เซ็นด้วย private key ที่สร้างใน
         Android Keystore (StrongBox ถ้ามี) โดยตั้ง `export = false`
         private key ออกจากเครื่องไม่ได้ จึงคัดลอกอุปกรณ์ไม่ได้
-    elevatedSession:
-      type: apiKey
-      in: cookie
-      name: elevation
-      description: |
-        **Step-up authentication** — ได้จาก `POST /admin/session/elevate` โดยใส่ PIN
-        อายุ 5 นาที ใช้กับ endpoint ที่แตะข้อมูลส่วนบุคคลหรือเปลี่ยนนโยบาย retention
 
-        เป็นชั้นที่ **เพิ่มจาก** `adminSession` ไม่ใช่แทนที่ และไม่ทดแทนการตรวจสิทธิ์
-        (`can_view_pii` / `can_download_documents` / role `admin`)
-    adminSession:
-      type: apiKey
-      in: cookie
-      name: session
-      description: |
-        session cookie ของ Staff Portal (มี CSRF token คู่กัน) — บังคับ TOTP 2FA
-        ใช้ได้เฉพาะกับ container `portal` (`staff.example`) ไม่ใช่ `api.example`
+  # step-up PIN, session ของ portal และ TOTP ยังมีอยู่จริง แต่เป็นกลไกในหน้า
+  # Filament ไม่ใช่ securityScheme ของ API นี้ — ดู docs/architecture.md §9
 
   parameters:
-    DriverId:
-      name: driverId
-      in: path
-      required: true
-      schema: { type: string, format: uuid }
     DeviceId:
       name: deviceId
       in: path
@@ -1090,37 +626,6 @@ components:
         integrity:
           $ref: '#/components/schemas/IntegritySignals'
 
-    DriverInput:
-      type: object
-      description: |
-        ข้อมูลคนขับรถ — **ใช้เฉพาะที่ `/admin/drivers` เท่านั้น**
-
-        คนขับไม่เคยส่งข้อมูลชุดนี้ผ่านแอป เจ้าหน้าที่เป็นคนกรอกหลังตรวจเอกสารกระดาษแล้ว
-
-        **ยืนยันแล้ว:** มี `employee_code` · ไม่มีทะเบียนรถ (รถเป็นของบริษัท จะผูกรถ↔คนขับในอนาคต ไม่ใช่ MVP)
-        · ไม่มีสังกัดผู้ประกอบการ
-      required: [full_name, employee_code, national_id, phone]
-      properties:
-        full_name: { type: string, maxLength: 255 }
-        employee_code:
-          type: string
-          maxLength: 50
-          description: '**รหัสพนักงานคนขับ** — unique ทั้งระบบ ซ้ำได้ → `409`'
-        national_id:
-          type: string
-          pattern: '^[0-9]{13}$'
-          description: |
-            เลขบัตรประชาชน 13 หลัก — ต้องตรวจ checksum ฝั่ง server ด้วย
-
-            **server เก็บเป็น `national_id_encrypted` (เข้ารหัส) + `national_id_hmac` (ไว้ค้นหา/กันซ้ำ)
-            ห้ามเก็บ plaintext และห้าม log** (PDPA)
-        phone: { type: string, maxLength: 20 }
-        license_number:
-          type: string
-          maxLength: 50
-          description: เลขใบขับขี่ (ไม่บังคับ)
-        license_expires_at: { type: string, format: date }
-
     EnrollResponse:
       type: object
       required: [device_id, status, pin_setup_token, expires_at]
@@ -1193,19 +698,6 @@ components:
           type: string
           example: release-2026-01
           description: ระบุว่าลงนามด้วย key ตัวไหน เพื่อรองรับการหมุนกุญแจ
-
-    RetentionPolicy:
-      type: object
-      description: |
-        นโยบายเก็บข้อมูลที่ผู้ดูแลระบบตั้งค่าได้ผ่าน GUI
-
-        ช่วงที่อนุญาต (7–3650 วัน) **validate ในโค้ด ผู้ดูแลแก้ไม่ได้** — กันการพิมพ์ผิด
-        ที่จะทำให้ข้อมูลหายถาวร (ดู `docs/architecture.md` §10.2)
-      properties:
-        key: { type: string }
-        value_days: { type: integer }
-        updated_by: { type: string }
-        updated_at: { type: string, format: date-time }
 
     TokenPair:
       type: object

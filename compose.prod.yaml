@@ -41,7 +41,12 @@ services:
       - ./.data/dist:/srv/dist:ro
       - appstorage:/var/www/html/storage:ro
     ports:
-      - "443:8443"
+      # ชื่อโฮสต์แยกช่องทาง (SNI) เหมือน dev — api / staff / dl บน 443 เดียว
+      # :80 redirect ไป https
+      # TODO(prod): ยังไม่มี docker/nginx/prod.conf — build prod จะพังที่ COPY
+      #             จนกว่าจะสร้าง (แยก cert ของ dl ออกจาก api ด้วย §11.5)
+      - "80:80"
+      - "443:443"
     <<: *hardening
 
   api:

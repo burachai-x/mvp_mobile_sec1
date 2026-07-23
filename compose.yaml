@@ -108,7 +108,7 @@ services:
     environment:
       <<: [*php-env, *cache-api]
       APP_ROLE: api
-      APP_URL: ${API_URL:-http://localhost:${API_PORT:-8080}}
+      APP_URL: ${API_URL:-https://api.192.168.10.53.nip.io}
     volumes:
       - ./apps/api:/var/www/html
     networks: [edge-net, data-net]
@@ -123,7 +123,7 @@ services:
     environment:
       <<: [*php-env, *pii-env, *garage-env, *cache-portal]
       APP_ROLE: portal
-      APP_URL: ${STAFF_URL:-http://localhost:${STAFF_PORT:-8081}}
+      APP_URL: ${STAFF_URL:-https://staff.192.168.10.53.nip.io}
     volumes:
       - ./apps/api:/var/www/html
     networks: [edge-net, data-net, garage-net]

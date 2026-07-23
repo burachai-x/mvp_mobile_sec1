@@ -12,12 +12,20 @@ make up         # เปิดทุก service
 make migrate
 ```
 
-| | URL |
+สามช่องทางแยกกันด้วย **ชื่อโฮสต์** บนพอร์ต 443 เดียว (แยกด้วย SNI) ส่วน `:80` redirect ไป https
+ชื่อ dev ใช้ nip.io เพราะมี IP อยู่ในตัวและ resolve ผ่าน DNS สาธารณะ — มือถือใช้ได้โดยไม่ต้องแก้ `/etc/hosts`
+
+| | URL (แทน `<ip>` ด้วย IP ของเครื่อง dev) |
 |---|---|
-| API (แอปคนขับ) | http://localhost:8080 |
-| Staff Portal | http://localhost:8081 |
-| manifest + APK | http://localhost:8082 |
+| API (แอปคนขับ) | `https://api.<ip>.nip.io` |
+| Staff Portal | `https://staff.<ip>.nip.io/staff` |
+| manifest + APK | `https://dl.<ip>.nip.io` |
 | Mailpit (dev) | http://localhost:8025 |
+
+cert ของ dev สร้างด้วย `./scripts/dev-tls.sh` (เซ็นด้วย CA ที่อยู่บนเครื่องนี้เท่านั้น)
+
+> **manifest/APK ต้องคนละชื่อโฮสต์กับ API เสมอ** — เป็นช่องทางกู้คืน ห้าม pin certificate
+> ถ้า pin พังพร้อมกันทั้งคู่ แอปทั้งฐานจะแก้ไม่ได้เลย (`docs/architecture.md` §11.5)
 
 `make help` ดูคำสั่งทั้งหมด
 
@@ -38,6 +46,10 @@ make migrate
 
 3. **ใช้ Valkey ไม่ใช่ Redis**
    ext-redis และ driver `redis` ของ Laravel ใช้ได้ตรงๆ (โปรโตคอลเข้ากันได้) แต่ service ชื่อ `valkey`
+
+4. **งานเจ้าหน้าที่ไม่ใช่ REST API**
+   ทุกอย่างในหน้าเจ้าหน้าที่ทำผ่าน Filament (Livewire) ไม่มี endpoint `/admin/*`
+   API ที่มีจริงมีแค่ 7 เส้นสำหรับแอปคนขับ — ดู `docs/api/openapi.yaml`
 
 ## เอกสาร
 

@@ -9,7 +9,7 @@
 
 ### Added
 - เอกสารออกแบบฉบับเต็ม (`docs/architecture.md`) — 15 หัวข้อ
-- API contract (`docs/api/openapi.yaml`) — OpenAPI 3.1, 15 paths
+- API contract (`docs/api/openapi.yaml`) — OpenAPI 3.1, 8 paths (เฉพาะ API ของแอปคนขับ)
 - Threat model (`docs/security/threat-model.md`) — 17 สถานการณ์การโจมตี
 - ADR 7 ฉบับ:
   - 0001 — device keypair ใน hardware keystore เป็นตัวผูกอุปกรณ์
@@ -29,7 +29,11 @@
   fallback ไป system trust store, ตรวจก่อนเขียน request byte แรก
   ทดสอบบนเครื่องจริงแล้วทั้งเคส pin ถูก / pin ผิด / CA ไม่น่าเชื่อถือ
   (`docs/runbook/certificate-pinning.md`)
-- `scripts/dev-tls.sh` + nginx `:8443` — TLS สำหรับ dev เพื่อทดสอบ pinning ได้จริง
+- `scripts/dev-tls.sh` + nginx TLS — cert ของ dev เพื่อทดสอบ pinning ได้จริง
+- **ตัวดาวน์โหลดและติดตั้ง APK** (§11.3 ข้อ 5–6) — โหลดแล้วตรวจ `apk_sha256` + ขนาด และตรวจ
+  signing cert ทั้งกับที่ manifest ระบุและกับกุญแจของแอปเอง ก่อนส่งให้ตัวติดตั้ง · พิสูจน์บนเครื่องจริง
+  ทั้งเคสสำเร็จและเคส hash ผิด (โหลดครบ 170 MB แล้วปฏิเสธ)
+- `POST /devices/{id}/pin/setup-token` — ให้เครื่องที่เจ้าหน้าที่รีเซ็ต PIN ขอ token ใหม่ได้เอง
 - **Signed update manifest** (§11.3) — ตรวจลายเซ็น ECDSA P-256, `expires_at`, `sequence`,
   ห้าม downgrade และตรวจว่า manifest เป็นของ package ตัวเอง · รองรับ public key หลายตัวเพื่อหมุนกุญแจ
   · `scripts/sign-manifest.sh` สำหรับลงนามออฟไลน์ (คีย์ห้ามอยู่บนเซิร์ฟเวอร์)
