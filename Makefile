@@ -160,6 +160,15 @@ secrets-scan: ## หา secret ที่หลุดเข้า git
 verify-isolation: ## 🔴 ยืนยันการแยก api/portal ครบทุกชั้น (ADR 0007, S18)
 	@bash scripts/verify-isolation.sh
 
+.PHONY: dev-hosts
+dev-hosts: ## พิมพ์บรรทัดสำหรับ /etc/hosts (แล็ปท็อป) + วิธีตั้ง DNS มือถือ
+	@echo "# เพิ่มบรรทัดนี้ใน /etc/hosts ของแล็ปท็อป (ครั้งเดียว ไม่ต้องแก้เวลาย้ายที่):"
+	@echo "127.0.0.1 api.driver.test staff.driver.test dl.driver.test"
+	@echo ""
+	@echo "# มือถือ: ตั้ง DNS ใน Wi-Fi ให้ชี้มาที่ IP แล็ปท็อป ($(shell grep -E '^HOST_LAN_IP=' .env 2>/dev/null | cut -d= -f2))"
+	@echo "#   dnsmasq ในสแตกจะตอบ *.driver.test เป็น IP นั้น"
+	@echo "#   ย้ายที่: แก้ HOST_LAN_IP ใน .env แล้ว 'docker compose up -d dnsmasq'"
+
 # ── ฐานข้อมูล / storage ──────────────────────────────────────
 .PHONY: psql
 psql: ## เปิด psql

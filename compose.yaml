@@ -108,7 +108,7 @@ services:
     environment:
       <<: [*php-env, *cache-api]
       APP_ROLE: api
-      APP_URL: ${API_URL:-https://api.192.168.10.53.nip.io}
+      APP_URL: ${API_URL:-https://api.driver.test}
     volumes:
       - ./apps/api:/var/www/html
     networks: [edge-net, data-net]
@@ -123,7 +123,7 @@ services:
     environment:
       <<: [*php-env, *pii-env, *garage-env, *cache-portal]
       APP_ROLE: portal
-      APP_URL: ${STAFF_URL:-https://staff.192.168.10.53.nip.io}
+      APP_URL: ${STAFF_URL:-https://staff.driver.test}
     volumes:
       - ./apps/api:/var/www/html
     networks: [edge-net, data-net, garage-net]
@@ -219,6 +219,43 @@ services:
     ports:
       - "${MAILPIT_PORT:-8025}:8025"
     networks: [data-net]
+    restart: unless-stopped
+
+  # DNS สำหรับ dev — ตอบ *.driver.test เป็น IP ของแล็ปท็อป เพื่อให้มือถือ
+  # (ที่แก้ /etc/hosts ไม่ได้) resolve ชื่อโดเมนคงที่ได้ตอนเดโม่นอกสถานที่
+  #
+  # ย้ายที่ = เปลี่ยน HOST_LAN_IP ตัวเดียวใน .env แล้ว restart service นี้
+  # ที่เหลือ (cert, pin, build แอป) ผูกกับ *ชื่อ* ไม่ใช่ IP จึงไม่ต้องแตะ
+  #
+  # มือถือ: ตั้ง DNS ใน Wi-Fi ให้ชี้มาที่ IP แล็ปท็อป (ไม่ต้อง root)
+  # แล็ปท็อป: ใส่ /etc/hosts → 127.0.0.1 (ดู `make dev-hosts`) ไม่ต้องพึ่ง service นี้
+  dnsmasq:
+    build:
+      context: .
+      dockerfile: docker/dnsmasq/Dockerfile
+    command:
+      # ทุก subdomain ของ driver.test → แล็ปท็อป
+      - "--address=/driver.test/${HOST_LAN_IP:-127.0.0.1}"
+      # query อื่นส่งขึ้น upstream ไม่งั้นมือถือที่ชี้ DNS มาที่นี่จะเข้าเน็ตไม่ได้
+      - "--server=1.1.1.1"
+      - "--server=8.8.8.8"
+      # ไม่อ่าน /etc/resolv.conf ของ container (กัน loop)
+      - "--no-resolv"
+      # ไม่อ่าน /etc/dnsmasq.conf ที่ alpine ตั้ง local-service ไว้ — ธงนั้น
+      # ทำให้ตอบเฉพาะ subnet เดียวกับ container มือถืออยู่คนละ subnet (LAN จริง)
+      # จึงถูกปฏิเสธ "ignoring query from non-local network"
+      - "--conf-file=/dev/null"
+    ports:
+      # ผูกเฉพาะ IP แล็ปท็อป ไม่ใช่ทุก interface — systemd-resolved (Ubuntu)
+      # ยึด 53 บน 127.0.0.53 อยู่แล้ว ถ้าผูก 0.0.0.0 จะชน แต่ผูก IP LAN
+      # ตรงๆ อยู่คนละ address กัน · มือถือชี้ DNS มาที่ IP นี้พอดี
+      - "${HOST_LAN_IP:-127.0.0.1}:53:53/udp"
+      - "${HOST_LAN_IP:-127.0.0.1}:53:53/tcp"
+    cap_drop: [ALL]
+    # NET_BIND_SERVICE ผูกพอร์ต 53 · SETGID/SETUID ให้ dnsmasq ทิ้ง root
+    # ไป user dnsmasq ได้เองหลัง bind (มันตั้งใจ drop privilege)
+    cap_add: [NET_BIND_SERVICE, SETGID, SETUID]
+    security_opt: [no-new-privileges:true]
     restart: unless-stopped
 
 networks:

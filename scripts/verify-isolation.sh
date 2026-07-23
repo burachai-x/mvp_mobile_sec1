@@ -81,10 +81,13 @@ echo
 echo "== ชั้น 4: route ที่ลงทะเบียนจริง =="
 # แยกด้วยชื่อโฮสต์บนพอร์ต 443 เดียว จึงต้องยิงด้วยชื่อ ไม่ใช่เลขพอร์ต
 CA=docker/nginx/dev-tls/dev-ca.crt
-BASE=${HOST_IP:-192.168.10.53}.nip.io
+BASE=driver.test
 api_sig=$(printf '%s' "${APP_SIGNATURE_SHA256_ALLOWLIST:-}" | cut -d, -f1)
 
-ask() { curl -s -o /dev/null -w '%{http_code}' -m 10 --cacert "$CA" -H "X-App-Signature: ${api_sig}" "$1" || echo 000; }
+# --resolve ชี้ทุกชื่อมาที่ 127.0.0.1 เอง — สคริปต์นี้ต้องรันได้โดยไม่พึ่ง
+# /etc/hosts ของเครื่อง (CI ไม่มี) และไม่พึ่ง dnsmasq (คนละเรื่องกับที่ตรวจ)
+resolve="--resolve api.${BASE}:443:127.0.0.1 --resolve staff.${BASE}:443:127.0.0.1"
+ask() { curl -s -o /dev/null -w '%{http_code}' -m 10 $resolve --cacert "$CA" -H "X-App-Signature: ${api_sig}" "$1" || echo 000; }
 
 api_staff=$(ask "https://api.${BASE}/staff")
 api_health=$(ask "https://api.${BASE}/api/v1/health")

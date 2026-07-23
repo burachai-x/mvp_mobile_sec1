@@ -14,7 +14,7 @@ RUN mkdir -p /etc/nginx/staff-acl
 ARG NGINX_ENV=dev
 COPY docker/nginx/${NGINX_ENV}.conf /tmp/app.conf
 
-# dev: วางตรงลง conf.d — hostname ถูก hardcode เป็น nip.io ไม่มี env ให้แทน
+# dev: วางตรงลง conf.d — hostname คงที่ (driver.test) ไม่มี env ให้แทน
 # prod: วางเป็น template — entrypoint (20-envsubst-on-templates.sh) แทนค่า
 #       ${API_HOST}/${STAFF_HOST}/${DL_HOST} จาก env ตอน container start
 #       ตัวแปรของ nginx เอง ($host ฯลฯ) ไม่ถูกแตะ เพราะ envsubst แทนเฉพาะ

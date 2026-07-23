@@ -10,8 +10,7 @@
 -->
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">192.168.10.53.nip.io</domain>
-        <domain includeSubdomains="false">192.168.10.53</domain>
+        <domain includeSubdomains="true">driver.test</domain>
 
         <!--
             The dev API over https is served with a certificate from a CA that

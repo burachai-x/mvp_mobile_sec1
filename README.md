@@ -12,17 +12,22 @@ make up         # เปิดทุก service
 make migrate
 ```
 
-สามช่องทางแยกกันด้วย **ชื่อโฮสต์** บนพอร์ต 443 เดียว (แยกด้วย SNI) ส่วน `:80` redirect ไป https
-ชื่อ dev ใช้ nip.io เพราะมี IP อยู่ในตัวและ resolve ผ่าน DNS สาธารณะ — มือถือใช้ได้โดยไม่ต้องแก้ `/etc/hosts`
+สามช่องทางแยกด้วย **ชื่อโฮสต์คงที่** บนพอร์ต 443 (แยกด้วย SNI) ส่วน `:80` redirect ไป https
+ชื่อไม่มี IP ในตัว → ย้ายที่เดโม่แล้วไม่ต้องแก้ cert/pin/build แอป
 
-| | URL (แทน `<ip>` ด้วย IP ของเครื่อง dev) |
+| | URL |
 |---|---|
-| API (แอปคนขับ) | `https://api.<ip>.nip.io` |
-| Staff Portal | `https://staff.<ip>.nip.io/staff` |
-| manifest + APK | `https://dl.<ip>.nip.io` |
+| API (แอปคนขับ) | `https://api.driver.test` |
+| Staff Portal | `https://staff.driver.test/staff` |
+| manifest + APK | `https://dl.driver.test` |
 | Mailpit (dev) | http://localhost:8025 |
 
-cert ของ dev สร้างด้วย `./scripts/dev-tls.sh` (เซ็นด้วย CA ที่อยู่บนเครื่องนี้เท่านั้น)
+**resolve ชื่อ:**
+- แล็ปท็อป → `make dev-hosts` แล้วเอาบรรทัดไปใส่ `/etc/hosts` (ครั้งเดียว ชี้ `127.0.0.1`)
+- มือถือ → ตั้ง DNS ใน Wi-Fi ให้ชี้ IP แล็ปท็อป · service `dnsmasq` ในสแตกตอบ `*.driver.test`
+- ย้ายที่ → แก้ `HOST_LAN_IP` ใน `.env` ตัวเดียว แล้ว `docker compose up -d dnsmasq`
+
+cert ของ dev สร้างด้วย `./scripts/dev-tls.sh` (SAN เป็นชื่อ ไม่ใช่ IP จึงใช้ได้ทุกที่)
 
 > **manifest/APK ต้องคนละชื่อโฮสต์กับ API เสมอ** — เป็นช่องทางกู้คืน ห้าม pin certificate
 > ถ้า pin พังพร้อมกันทั้งคู่ แอปทั้งฐานจะแก้ไม่ได้เลย (`docs/architecture.md` §11.5)

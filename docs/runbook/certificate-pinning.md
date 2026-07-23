@@ -55,8 +55,8 @@ openssl s_client -connect api.example.com:443 -servername api.example.com </dev/
 nginx เสิร์ฟทั้งหมดที่ **:443** แยกช่องทางด้วยชื่อโฮสต์ (SNI) ส่วน **:80** redirect ไป https
 cert mount เข้าไป ไม่ได้ COPY ลง image
 
-ชื่อ dev ใช้ nip.io — ชื่อมี IP อยู่ในตัวและ resolve ผ่าน DNS สาธารณะ มือถือจึงใช้ได้
-โดยไม่ต้องแก้ `/etc/hosts` ซึ่งบนเครื่องที่ไม่ root ทำไม่ได้
+ชื่อ dev คงที่ (`*.driver.test`) ไม่มี IP ในตัว มือถือ resolve ผ่าน service `dnsmasq`
+ในสแตก แล็ปท็อปใส่ `/etc/hosts` (`make dev-hosts`) ย้ายที่แก้ `HOST_LAN_IP` ตัวเดียว
 
 ```bash
 ./scripts/dev-tls.sh
@@ -67,14 +67,14 @@ docker compose up -d nginx
 
 ```bash
 curl --cacert docker/nginx/dev-tls/dev-ca.crt \
-  -H "X-App-Signature: <sig>" https://api.<ip>.nip.io/api/v1/health
+  -H "X-App-Signature: <sig>" https://api.driver.test/api/v1/health
 ```
 
 ตรวจตรรกะ pin กับ handshake จริงด้วยโค้ดชุดเดียวกับที่แอปใช้:
 
 ```bash
 cd apps/mobile
-dart run tool/check_pin.dart api.<ip>.nip.io 443 ../../docker/nginx/dev-tls/dev-ca.crt <pin1>,<pin2>
+dart run tool/check_pin.dart api.driver.test 443 ../../docker/nginx/dev-tls/dev-ca.crt <pin1>,<pin2>
 ```
 
 ควรได้ครบ 3 เคส — pin ถูก `accepted: true`, pin ผิด `accepted: false`,
