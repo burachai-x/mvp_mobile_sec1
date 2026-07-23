@@ -5,9 +5,11 @@ import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'api_client.dart';
+import 'app_lock.dart';
 import 'api_config.dart';
 import 'device_key.dart';
 import 'enrollment.dart';
+import 'lock_screen.dart';
 import 'update_checker.dart';
 import 'update_manifest.dart';
 import 'update_state.dart';
@@ -33,7 +35,7 @@ class DriverApp extends StatelessWidget {
   }
 }
 
-enum _Step { loading, needsEnrollment, enrolling, needsPin, active }
+enum _Step { loading, needsEnrollment, enrolling, needsPin, locked, active }
 
 class EnrollScreen extends StatefulWidget {
   const EnrollScreen({super.key});
@@ -53,6 +55,15 @@ class _EnrollScreenState extends State<EnrollScreen> {
 
   _Step _step = _Step.loading;
   EnrollmentState? _state;
+  AppLock? _lock;
+  bool _biometricUsable = false;
+
+  /// Held in memory only, for the moment the driver is asked whether to enable
+  /// fingerprint unlock. Writing it to disk unsealed would defeat the point of
+  /// sealing it.
+  String? _pendingRefreshToken;
+
+  BiometricAvailability _biometric = BiometricAvailability.unavailable;
   EnrollmentResult? _enrollment;
   String? _error;
   Map<String, bool> _integrity = const {};
@@ -88,10 +99,21 @@ class _EnrollScreenState extends State<EnrollScreen> {
     // pinning silently off looks exactly like one with it on.
     _note('Certificate pinning: ${_api.pins.isEnabled ? "enforced" : "off"}');
 
+    final lock = await AppLock.load();
+    final biometric = await AppLock.availability();
+
     setState(() {
       _state = state;
+      _lock = lock;
       _integrity = integrity;
-      _step = (state.deviceId != null && hasKey) ? _Step.active : _Step.needsEnrollment;
+      // Offered only when the device can actually gate a key behind it and the
+      // driver has already sealed a token; otherwise the pad is all there is.
+      _biometric = biometric;
+      _biometricUsable =
+          lock.biometricEnabled && biometric == BiometricAvailability.available;
+      // An enrolled device starts locked. Nothing in the app is reachable until
+      // the server has accepted a PIN or a refresh token.
+      _step = (state.deviceId != null && hasKey) ? _Step.locked : _Step.needsEnrollment;
     });
 
     // Deliberately not awaited. Blocking the first frame on a network call left
@@ -131,6 +153,67 @@ class _EnrollScreenState extends State<EnrollScreen> {
     } catch (e) {
       // A server that is simply unreachable must not stop a driver working.
       _note('Update check failed: $e');
+    }
+  }
+
+  /// PIN goes to the server, which owns the lockout and the block-after-N rule.
+  /// Checking it locally would be a check the phone's owner could edit.
+  Future<String?> _unlockWithPin(String pin) async {
+    try {
+      final tokens = await _api.verifyPin(deviceId: _state!.deviceId!, pin: pin);
+
+      // Sealing here rather than at setup: this is the moment a driver has just
+      // proven they know the PIN, which is what the fingerprint stands in for.
+      await _lock!.resealAfterRefresh(tokens['refresh_token'] as String);
+
+      setState(() => _step = _Step.active);
+
+      return null;
+    } on ApiException catch (e) {
+      return _explain(e);
+    } catch (e) {
+      return '$e';
+    }
+  }
+
+  /// The fingerprint releases a refresh token; the server still decides whether
+  /// the session stands, and rotates the token as it does.
+  Future<String?> _unlockWithBiometric() async {
+    try {
+      final refreshToken = await _lock!.unlockWithBiometric();
+
+      final tokens = await _api.refresh(
+        deviceId: _state!.deviceId!,
+        refreshToken: refreshToken,
+      );
+
+      // Refresh tokens rotate, so the sealed copy is spent. Leaving it would
+      // give a fingerprint unlock that works exactly once more.
+      await _lock!.resealAfterRefresh(tokens['refresh_token'] as String);
+
+      setState(() => _step = _Step.active);
+
+      return null;
+    } on BiometricFailure catch (e) {
+      if (e.outcome == BiometricOutcome.invalidated) {
+        setState(() => _biometricUsable = false);
+
+        return 'A fingerprint was added or removed, so unlock is disabled. Use your PIN.';
+      }
+
+      return switch (e.outcome) {
+        BiometricOutcome.cancelled => null,
+        BiometricOutcome.lockout => 'Too many attempts. Use your PIN.',
+        BiometricOutcome.noneEnrolled => 'No fingerprint is set up on this phone.',
+        _ => 'Fingerprint unlock failed. Use your PIN.',
+      };
+    } on ApiException catch (e) {
+      // A refused token means the session is gone, not that the finger was
+      // wrong, so the fingerprint option is retired rather than retried.
+      await _lock!.disableBiometric();
+      setState(() => _biometricUsable = false);
+
+      return _explain(e);
     }
   }
 
@@ -194,7 +277,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
     try {
       _note('Signing the PIN request with the device key…');
 
-      await _api.setPin(
+      final tokens = await _api.setPin(
         deviceId: _enrollment!.deviceId,
         setupToken: _enrollment!.setupToken,
         pin: pin,
@@ -203,6 +286,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
       _note('Signature verified server-side — device is active');
       setState(() {
         _error = null;
+        _pendingRefreshToken = tokens['refresh_token'] as String?;
         _step = _Step.active;
       });
     } on ApiException catch (e) {
@@ -225,6 +309,31 @@ class _EnrollScreenState extends State<EnrollScreen> {
         _ => '${e.code} — ${e.message}',
       };
 
+  /// Seals the current refresh token behind the fingerprint sensor.
+  ///
+  /// Only offered right after a PIN was accepted, so what gets sealed belongs to
+  /// a driver who has just proved they know it.
+  Future<void> _enableBiometric() async {
+    final token = _pendingRefreshToken;
+
+    if (token == null) return;
+
+    try {
+      await _lock!.enableBiometric(token);
+
+      setState(() {
+        _biometricUsable = true;
+        _pendingRefreshToken = null;
+      });
+
+      _note('Fingerprint unlock enabled');
+    } on BiometricFailure catch (e) {
+      if (e.outcome != BiometricOutcome.cancelled) {
+        _note('Fingerprint setup failed: ${e.outcome.name}');
+      }
+    }
+  }
+
   Future<void> _reset() async {
     await _state!.reset();
 
@@ -238,6 +347,17 @@ class _EnrollScreenState extends State<EnrollScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Replaces the whole scaffold rather than sitting inside it: the app bar
+    // carries a button that clears the device key, which must not be reachable
+    // before the driver has unlocked.
+    if (_step == _Step.locked) {
+      return LockScreen(
+        onPin: _unlockWithPin,
+        onBiometric: _unlockWithBiometric,
+        biometricAvailable: _biometricUsable,
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Driver enrollment'),
@@ -282,6 +402,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
             onSubmit: _setPin,
             error: _error,
           ),
+        _Step.locked => const SizedBox.shrink(),
         _Step.active => _active(),
       };
 
@@ -361,8 +482,46 @@ class _EnrollScreenState extends State<EnrollScreen> {
             textAlign: TextAlign.center,
             style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
           ),
+          const SizedBox(height: 32),
+          _biometricSetting(),
         ],
       );
+
+  Widget _biometricSetting() {
+    if (_biometricUsable) {
+      return TextButton.icon(
+        onPressed: () async {
+          await _lock!.disableBiometric();
+          setState(() => _biometricUsable = false);
+        },
+        icon: const Icon(Icons.fingerprint),
+        label: const Text('Turn off fingerprint unlock'),
+      );
+    }
+
+    // Offered only while a fresh token is in hand. Afterwards the driver enables
+    // it the next time they unlock with their PIN, which is when one exists
+    // again — the alternative is keeping a token unsealed on disk for the
+    // convenience of a settings screen.
+    if (_pendingRefreshToken != null && _biometric == BiometricAvailability.available) {
+      return FilledButton.icon(
+        onPressed: _enableBiometric,
+        icon: const Icon(Icons.fingerprint),
+        label: const Text('Use fingerprint next time'),
+      );
+    }
+
+    return Text(
+      switch (_biometric) {
+        BiometricAvailability.noneEnrolled =>
+          'Set up a fingerprint in phone settings to unlock without typing.',
+        BiometricAvailability.noHardware => '',
+        _ => '',
+      },
+      textAlign: TextAlign.center,
+      style: const TextStyle(fontSize: 12, color: Colors.black54),
+    );
+  }
 
   Widget _errorBox(String message) => Container(
         padding: const EdgeInsets.all(12),

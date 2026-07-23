@@ -44,6 +44,14 @@ final class RateLimitServiceProvider extends ServiceProvider
         RateLimiter::for('pin-verify', fn (Request $request) => Limit::perMinute(
             (int) config('security.rate_limits.pin_verify_per_minute', 10)
         )->by((string) ($request->input('device_id') ?? $request->ip()))->response($this->tooMany(...)));
+
+        // Biometric unlock spends a refresh token, so a driver who opens the app
+        // repeatedly through the day comes through here rather than pin-verify.
+        // Bounded per hour: a device needing more than this is either broken or
+        // replaying, and both are worth stopping.
+        RateLimiter::for('token-refresh', fn (Request $request) => Limit::perHour(
+            (int) config('security.rate_limits.token_refresh_per_hour', 60)
+        )->by((string) ($request->input('device_id') ?? $request->ip()))->response($this->tooMany(...)));
     }
 
     /**

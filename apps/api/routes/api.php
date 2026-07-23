@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Controllers\Api\EnrollController;
 use App\Http\Controllers\Api\PinController;
+use App\Http\Controllers\Api\RefreshController;
 use App\Http\Middleware\EnforceMinAppVersion;
 use App\Http\Middleware\VerifyAppSignature;
 use App\Http\Middleware\VerifyDeviceSignature;
@@ -35,4 +36,10 @@ Route::prefix('api/v1')
 
         Route::post('auth/pin/verify', [PinController::class, 'verify'])
             ->middleware([VerifyDeviceSignature::class, 'throttle:pin-verify']);
+
+        // Unlocking with a fingerprint spends a refresh token here rather than a
+        // PIN, so this is on the same footing as pin/verify: signed by the
+        // device key, rate limited, and the server decides.
+        Route::post('auth/refresh', RefreshController::class)
+            ->middleware([VerifyDeviceSignature::class, 'throttle:token-refresh']);
     });

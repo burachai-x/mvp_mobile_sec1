@@ -331,8 +331,12 @@ paths:
           application/json:
             schema:
               type: object
-              required: [refresh_token]
+              required: [device_id, refresh_token]
               properties:
+                # ต้องส่งมาด้วยเพื่อให้ middleware หา public key ของอุปกรณ์
+                # มาตรวจลายเซ็นได้ ก่อนที่โค้ดส่วนไหนจะแตะ refresh token
+                # (แบบเดียวกับ /auth/pin/verify)
+                device_id: { type: string, format: uuid }
                 refresh_token: { type: string }
       responses:
         '200':

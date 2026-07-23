@@ -89,6 +89,20 @@ class ApiClient {
     });
   }
 
+  /// Spends a refresh token for a new pair.
+  ///
+  /// Rotating, so the token handed in is dead once this returns and the caller
+  /// has to store the new one.
+  Future<Map<String, dynamic>> refresh({
+    required String deviceId,
+    required String refreshToken,
+  }) {
+    return _send('POST', '/api/v1/auth/refresh', {
+      'device_id': deviceId,
+      'refresh_token': refreshToken,
+    });
+  }
+
   Future<Map<String, dynamic>> health() => _send('GET', '/api/v1/health', null, signed: false);
 
   Future<Map<String, dynamic>> _send(

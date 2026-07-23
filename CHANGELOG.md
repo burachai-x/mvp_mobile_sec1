@@ -33,6 +33,10 @@
 - **Signed update manifest** (§11.3) — ตรวจลายเซ็น ECDSA P-256, `expires_at`, `sequence`,
   ห้าม downgrade และตรวจว่า manifest เป็นของ package ตัวเอง · รองรับ public key หลายตัวเพื่อหมุนกุญแจ
   · `scripts/sign-manifest.sh` สำหรับลงนามออฟไลน์ (คีย์ห้ามอยู่บนเซิร์ฟเวอร์)
+- **หน้าล็อกแอป** — คนขับต้องใส่ PIN 6 หลักทุกครั้งที่เปิดแอป ตรวจกับ server (lockout อยู่ที่ server)
+- **ปลดล็อกด้วยลายนิ้วมือ** — refresh token ถูกเข้ารหัสด้วย key ใน Keystore ที่ TEE ไม่ยอมรันจนกว่า
+  ลายนิ้วมือจะผ่าน (`setUserAuthenticationRequired`) และ key จะถูกทำลายเมื่อมีการเพิ่ม/ลบลายนิ้วมือ
+- `POST /auth/refresh` — มีใน `openapi.yaml` มาตั้งแต่ต้นแต่ยังไม่เคย implement
 - **Root / hook / emulator / debugger detection** ฝั่งแอป — ส่งขึ้น server ตอน enroll
   และแสดงบนหน้าจอ · server ใช้ขยับ risk score เท่านั้น ไม่ตัดสินใจแทน (§4.1)
 - **Kill switch ของ certificate pinning** — ปิด pinning จากระยะไกลได้ผ่าน manifest ที่ลงนามแล้วเท่านั้น

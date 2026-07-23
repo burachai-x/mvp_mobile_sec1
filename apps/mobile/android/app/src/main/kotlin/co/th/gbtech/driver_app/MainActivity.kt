@@ -1,11 +1,13 @@
 package co.th.gbtech.driver_app
 
 import android.util.Base64
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+// FlutterFragmentActivity, not FlutterActivity: BiometricPrompt is built on
+// FragmentActivity and cannot attach to anything else.
+class MainActivity : FlutterFragmentActivity() {
 
     private companion object {
         const val CHANNEL = "co.th.gbtech.driver_app/keystore"
@@ -48,8 +50,31 @@ class MainActivity : FlutterActivity() {
 
                         "clear" -> {
                             DeviceKeystore.clear()
+                            BiometricVault.clear()
                             result.success(null)
                         }
+
+                        "biometricAvailability" ->
+                            result.success(BiometricVault.availability(this))
+
+                        "biometricHasSecret" -> result.success(BiometricVault.hasSecret())
+
+                        "biometricForget" -> {
+                            BiometricVault.clear()
+                            result.success(null)
+                        }
+
+                        // The prompt is asynchronous, so these two reply from the
+                        // callback rather than returning.
+                        "biometricEnroll" -> BiometricVault.enroll(
+                            this,
+                            call.argument<String>("secret") ?: "",
+                        ) { outcome -> reply(result, outcome) }
+
+                        "biometricUnlock" -> BiometricVault.unlock(
+                            this,
+                            call.argument<String>("sealed") ?: "",
+                        ) { outcome -> reply(result, outcome) }
 
                         else -> result.notImplemented()
                     }
@@ -60,5 +85,17 @@ class MainActivity : FlutterActivity() {
                     result.error("keystore_error", e.message, e::class.java.simpleName)
                 }
             }
+    }
+
+    /**
+     * Errors carry the reason as the code so Dart can tell a cancelled prompt
+     * from a locked-out sensor from a key destroyed by a new fingerprint. The
+     * message is never key material — only public values cross this channel.
+     */
+    private fun reply(result: MethodChannel.Result, outcome: Result<String>) {
+        outcome.fold(
+            onSuccess = { result.success(it) },
+            onFailure = { result.error(it.message ?: "failed", it.message, null) },
+        )
     }
 }
