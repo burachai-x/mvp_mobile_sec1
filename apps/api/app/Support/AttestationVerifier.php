@@ -4,53 +4,94 @@ declare(strict_types=1);
 
 namespace App\Support;
 
+use App\Support\Attestation\ChainVerifier;
+use Throwable;
+
 /**
  * Android Key Attestation (architecture.md §4.2).
  *
- * ⚠️ SCOPE — read before relying on this.
+ * The certificate chain is verified up to a Google root, so the boot state read
+ * here was signed by the device's TEE and cannot be produced by an app. That is
+ * what separates this from IntegritySignals, which Magisk hides from and Frida
+ * rewrites — those are kept only as a weak corroborating signal.
  *
- * This does NOT yet verify the attestation certificate chain. It records what
- * the app reported and scores it, which is useful for the monitor-mode rollout
- * but is *not* the security control described in §4.2.
- *
- * Until `verifyChain()` is implemented, these values carry exactly as much
- * weight as IntegritySignals: the app supplied them and a rooted device can
- * supply anything. The real control needs the chain parsed and validated up to
- * Google's attestation root, with the KeyDescription extension read from the
- * leaf — that is where verifiedBootState actually lives and where it cannot be
- * forged.
- *
- * Enforcement stays off until then. Turning KEY_ATTESTATION_ENFORCE on now
- * would only block devices honest enough to report their own root status.
+ * Rollout is in monitor mode: the verdict is recorded and alerted on, but does
+ * not block, until there is data on what real driver hardware reports. Enforcing
+ * on day one would lock out drivers before anyone knows how many that is.
  */
 final class AttestationVerifier
 {
+    public function __construct(private readonly ?ChainVerifier $chain = null) {}
+
     /**
-     * @param  array<string, mixed>  $attestation  as reported by the app
-     * @return array{risk_score: int, action: string, reasons: list<string>, chain_verified: bool}
+     * @param  array<string, mixed>  $attestation  as supplied by the app
+     * @param  array<string, mixed>  $integrity
+     * @return array{risk_score: int, action: string, reasons: list<string>, chain_verified: bool, attested: array<string, mixed>}
      */
-    public function assess(array $attestation, array $integrity = []): array
+    public function assess(array $attestation, array $integrity = [], ?string $expectedChallenge = null): array
     {
         $reasons = [];
         $score = 0;
+        $chainVerified = false;
+        $attested = [];
 
-        $bootState = $attestation['verified_boot_state'] ?? null;
-        if ($bootState !== null && $bootState !== 'Verified') {
-            $reasons[] = "verified_boot_state={$bootState}";
-            $score += 50;
+        /** @var list<string> $chainPems */
+        $chainPems = array_values(array_filter(
+            (array) ($attestation['certificate_chain'] ?? []),
+            static fn ($pem): bool => is_string($pem) && $pem !== '',
+        ));
+
+        if ($chainPems === []) {
+            // Older builds, or a caller that simply omitted it. Not proof of
+            // anything wrong, but it means nothing here can be trusted.
+            $reasons[] = 'no_attestation_chain';
+            $score += 30;
+        } else {
+            try {
+                $description = ($this->chain ?? ChainVerifier::make())->verify($chainPems);
+                $chainVerified = true;
+
+                $attested = [
+                    'verified_boot_state' => $description->verifiedBootState,
+                    'device_locked' => $description->deviceLocked,
+                    'security_level' => $description->attestationSecurityLevel,
+                    'os_patch_level' => $description->osPatchLevel,
+                ];
+
+                // Binds the attestation to this enrollment. Without it a chain
+                // captured from any genuine device could be replayed here, and
+                // every check above it would still pass.
+                if ($expectedChallenge !== null
+                    && ! hash_equals($expectedChallenge, $description->attestationChallenge)
+                ) {
+                    $reasons[] = 'challenge_mismatch';
+                    $score += 100;
+                }
+
+                if ($description->verifiedBootState !== 'Verified') {
+                    $reasons[] = 'verified_boot_state='.($description->verifiedBootState ?? 'unknown');
+                    $score += 50;
+                }
+
+                if ($description->deviceLocked === false) {
+                    $reasons[] = 'bootloader_unlocked';
+                    $score += 40;
+                }
+
+                if ($description->attestationSecurityLevel === 'Software') {
+                    $reasons[] = 'key_not_hardware_backed';
+                    $score += 40;
+                }
+            } catch (Throwable $e) {
+                // A chain that fails to verify is a stronger signal than no chain
+                // at all: something produced one and it did not hold up.
+                $reasons[] = 'chain_invalid';
+                $attested = ['error' => $e->getMessage()];
+                $score += 60;
+            }
         }
 
-        if (($attestation['device_locked'] ?? null) === false) {
-            $reasons[] = 'bootloader_unlocked';
-            $score += 40;
-        }
-
-        if (($attestation['security_level'] ?? null) === 'Software') {
-            $reasons[] = 'key_not_hardware_backed';
-            $score += 40;
-        }
-
-        // Client-side checks. Forgeable, so they only nudge the score — never
+        // Self-reported and forgeable, so these only nudge the score. They never
         // decide on their own (§4.1).
         foreach (['rooted', 'hook_framework_detected', 'emulator', 'debugger_attached'] as $flag) {
             if (($integrity[$flag] ?? false) === true) {
@@ -59,23 +100,18 @@ final class AttestationVerifier
             }
         }
 
-        $enforce = (bool) config('security.attestation.enforce', false);
-
         return [
             'risk_score' => min($score, 100),
-            'action' => $this->decide($score, $enforce),
+            'action' => $this->decide($score, (bool) config('security.attestation.enforce', false)),
             'reasons' => $reasons,
-            // Explicit so nothing downstream mistakes a recorded claim for a
-            // verified one.
-            'chain_verified' => false,
+            'chain_verified' => $chainVerified,
+            'attested' => $attested,
         ];
     }
 
     private function decide(int $score, bool $enforce): string
     {
         if (! $enforce) {
-            // Monitor mode: still surface it, but let the device enroll so we
-            // learn what real driver hardware looks like before blocking anyone.
             return $score >= 50 ? 'warn' : 'allow';
         }
 

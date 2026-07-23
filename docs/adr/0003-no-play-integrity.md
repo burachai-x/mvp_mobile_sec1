@@ -54,8 +54,14 @@ Android Key Attestation ให้ TEE/StrongBox ของเครื่อง�
 ในนั้นมี `verifiedBootState`, `deviceLocked`, `securityLevel`, `osPatchLevel`
 และ **ไม่ต้องมี Play Console หรือ Play Services** — เป็นความสามารถของ Android framework เอง
 
-→ **ใช้ใน MVP** เป็นชั้น L2.5 ปฏิเสธการ enroll เมื่อ `verifiedBootState != Verified` หรือ bootloader ปลดล็อก
+→ **ทำแล้วใน MVP** เป็นชั้น L2.5 — `ChainVerifier` verify chain ถึง root ของ Google จริง
+แล้วอ่าน `verifiedBootState` / `deviceLocked` จาก `teeEnforced` เท่านั้น
 เครื่อง root ส่วนใหญ่ต้องปลดล็อก bootloader ก่อน จึงถูกจับได้ตรงนี้ และแอปปลอมค่าไม่ได้เพราะไม่มีกุญแจของ TEE
+
+ผูก **attestation challenge = `sha256(activation_token)`** ไม่งั้น chain ที่ดักมาจากเครื่องแท้
+เครื่องไหนก็ replay ได้ ซึ่ง chain verification อย่างเดียวปิดช่องนี้ไม่ได้
+
+รันแบบ **monitor mode** ก่อน (บันทึก + เตือน ไม่บล็อก) จนกว่าจะรู้ว่าเครื่องคนขับจริงผ่านเกณฑ์กี่ %
 
 **สิ่งที่ยังต่างจาก Play Integrity:** ตรวจได้แค่สถานะตอน boot ไม่ได้ตรวจว่าตอนนี้มี Frida รันอยู่ไหม
 เครื่องที่ bootloader ล็อกแต่ถูก exploit ภายหลังยังหลุดได้ — ส่วนนี้ยังปิดไม่ได้

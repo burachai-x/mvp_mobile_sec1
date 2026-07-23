@@ -65,11 +65,18 @@ final class EnrollController
             return $this->codeUnusable($request);
         }
 
-        // (c)(d) Device health. Recorded either way; only blocks once
-        // KEY_ATTESTATION_ENFORCE is on (§4.2).
+        // (c)(d) Device health. The chain is verified up to a Google root, so
+        // what comes back was signed by the device TEE. Recorded either way;
+        // only blocks once KEY_ATTESTATION_ENFORCE is on (§4.2).
+        //
+        // The activation token doubles as the attestation challenge: it is
+        // server-issued, single-use and already in the app's hands, so it binds
+        // the attestation to this enrollment without an extra round trip. Without
+        // a challenge, a chain captured from any genuine device would replay here.
         $assessment = (new AttestationVerifier)->assess(
             $data['key_attestation'] ?? [],
             $data['integrity'] ?? [],
+            expectedChallenge: hash('sha256', $data['activation_token'], binary: true),
         );
 
         if ($assessment['action'] === 'block') {
@@ -114,7 +121,10 @@ final class EnrollController
                 'device_id' => $device->getKey(),
                 'verdict' => [
                     'reported' => $data['integrity'] ?? [],
-                    'attestation' => $data['key_attestation'] ?? [],
+                    // Only what the chain actually proved — not the raw payload,
+                    // which is the app's unverified claim and would be mistaken
+                    // for evidence when someone reads this back later.
+                    'attested' => $assessment['attested'],
                     'reasons' => $assessment['reasons'],
                     'chain_verified' => $assessment['chain_verified'],
                 ],

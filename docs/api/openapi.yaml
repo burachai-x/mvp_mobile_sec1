@@ -992,9 +992,23 @@ components:
             - `securityLevel` — `TrustedEnvironment` / `StrongBox` / `Software`
             - `osPatchLevel` — ใช้ปฏิเสธเครื่องที่ไม่ได้อัปเดตนานเกินไป
 
+            ### รูปแบบที่ต้องส่ง
+            ```json
+            { "certificate_chain": ["<leaf PEM>", "<intermediate PEM>", "<root PEM>"] }
+            ```
+            เรียงจาก leaf ไป root ตามที่ Android คืนมาจาก `KeyStore.getCertificateChain()`
+
+            ### 🔴 attestation challenge
+            ตอนสร้าง key ในแอป ต้องเรียก `setAttestationChallenge(sha256(activation_token))`
+            โดยใช้ **byte ดิบของ SHA-256** ไม่ใช่ hex string
+
+            server ตรวจว่า challenge ใน chain ตรงกับ token ที่ตัวเองออกให้
+            **ถ้าไม่ผูก challenge chain ที่ดักมาจากเครื่องแท้เครื่องไหนก็ replay มาใช้ได้
+            แล้วการตรวจทุกชั้นข้างบนจะผ่านหมด**
+
             **MVP: monitor mode** — บันทึก + แจ้งเตือน ยังไม่ปฏิเสธ
             เมื่อสลับ flag เป็นบังคับแล้ว ไม่ผ่านเกณฑ์ → `403 E_INTEGRITY_FAILED`
-            ดู `docs/architecture.md` §4.2 (รวมข้อจำกัดที่ต้องรู้)
+            ดู `docs/architecture.md` §4.2
         device_info:
           type: object
           required: [platform, model, os_version]
