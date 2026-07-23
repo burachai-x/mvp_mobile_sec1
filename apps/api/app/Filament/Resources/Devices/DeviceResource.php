@@ -11,6 +11,8 @@ use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
@@ -41,6 +43,7 @@ class DeviceResource extends Resource
             ->defaultSort('last_seen_at', 'desc')
             ->recordActions([
                 static::deleteDeviceAction(),
+                static::restoreDeviceAction(),
                 static::resetPinAction(),
             ]);
     }
@@ -124,6 +127,75 @@ class DeviceResource extends Resource
                         'reason' => $data['revoke_reason'],
                     ]);
                 });
+            });
+    }
+
+    /**
+     * Undoes a delete that should not have happened.
+     *
+     * Admin only, and deliberately not a mirror image of deleting. A device is
+     * revoked when a phone is lost or stolen, so bringing one back is the rare
+     * case of a mistake — a reason is recorded, and the sessions that were
+     * killed stay killed. The driver unlocks with their PIN and gets a fresh
+     * one; restoring the old sessions would hand a live credential back to
+     * whoever has the phone.
+     */
+    private static function restoreDeviceAction(): Action
+    {
+        return Action::make('restoreDevice')
+            ->label('Restore')
+            ->icon(Heroicon::OutlinedArrowUturnLeft)
+            ->visible(fn (Device $record): bool => $record->deleted_at !== null
+                && Filament::auth()->user()?->role === 'admin')
+            ->schema([
+                TextInput::make('restore_reason')
+                    ->label('Reason')
+                    ->placeholder('e.g. deleted by mistake, phone was found')
+                    ->required()
+                    ->maxLength(255),
+            ])
+            ->modalDescription('Use only when the device was never actually lost. The driver signs in again with their PIN.')
+            ->action(function (Device $record, array $data): void {
+                // One driver, one device — enforced by a partial unique index,
+                // so without this check the restore would surface as a database
+                // error rather than something staff can act on.
+                $replacement = Device::usable()
+                    ->where('driver_id', $record->driver_id)
+                    ->whereKeyNot($record->getKey())
+                    ->exists();
+
+                if ($replacement) {
+                    Notification::make()
+                        ->danger()
+                        ->title('Cannot restore')
+                        ->body('This driver already has another device. Delete that one first.')
+                        ->send();
+
+                    return;
+                }
+
+                DB::transaction(function () use ($record, $data): void {
+                    $record->restore();
+
+                    $record->update([
+                        // Back to where it was: a device that had a PIN keeps
+                        // it, one that never finished enrolling still needs one.
+                        'status' => $record->pin_hash === null ? 'pending_pin' : 'active',
+                        'revoke_reason' => null,
+                        'revoked_at' => null,
+                        'revoked_by' => null,
+                    ]);
+
+                    StaffAudit::log('device.restored', 'device', $record->getKey(), [
+                        'reason' => $data['restore_reason'],
+                    ]);
+                });
+
+                Notification::make()
+                    ->success()
+                    ->title('Device restored')
+                    ->body('The driver can sign in with their PIN again.')
+                    ->send();
             });
     }
 
