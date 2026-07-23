@@ -61,7 +61,15 @@ class ActivationCodeResource extends Resource
                 // fails native validation and the Issue button silently does
                 // nothing, with no request sent and no error shown.
                 ->minDate(now()->startOfMinute())
-                ->default(now()->addDays(7)->startOfMinute()),
+                // Fifteen minutes: the driver is standing in front of the desk
+                // when a code is issued, so anything longer is a redeemable code
+                // sitting in the database for no reason. Staff who need longer
+                // can type a later time.
+                //
+                // startOfMinute() before adding, so the default lands on the same
+                // grid as minDate above.
+                ->default(now()->startOfMinute()->addMinutes(15))
+                ->helperText('The driver should scan within this window. Issue a new code if it lapses.'),
 
             TextInput::make('note')
                 ->maxLength(255),

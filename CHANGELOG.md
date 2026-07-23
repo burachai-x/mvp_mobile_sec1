@@ -23,6 +23,10 @@
 - โครง Docker: `compose.yaml`, `compose.prod.yaml`, `docker/php`, `docker/nginx`, `docker/garage`
 - `Makefile` — ห่อ `-u www-data` ไว้ทุก target ที่เขียนลง `storage/`
 - `make verify-isolation` — ยืนยันว่า `api` ไม่มี KEK และต่อ Garage ไม่ได้
+- แอปคนขับ (`apps/mobile/`) — สแกน QR, สร้าง EC P-256 ใน Android Keystore พร้อม attestation
+  challenge, enroll, ตั้ง PIN และเซ็นทุก request ด้วย key ที่ export ไม่ได้
+- ปุ่ม **Show QR** ในหน้า Activation Codes — ออก token ใหม่ทุกครั้งที่กด จึงเป็นช่องทางกู้คืน
+  ได้โดยยังเก็บแค่ hash ไว้เหมือนเดิม (§6.2)
 
 ### Security
 - แยก `api` / `portal` ที่ระดับ container, secret และ network (ADR 0007)
@@ -30,7 +34,20 @@
 - Masking ข้อมูลส่วนบุคคลเป็นค่าเริ่มต้น + step-up PIN 10 นาที + audit ทุกครั้ง
 - `.gitleaks.toml` พร้อม rule เฉพาะโปรเจกต์ (KEK, pepper, manifest key, เลขบัตร 13 หลัก)
 
+### Changed
+- อายุ activation code ดีฟอลต์ 7 วัน → **15 นาที** ให้ตรงกับที่ `docs/architecture.md` §6.2 ระบุไว้
+- การออก code ไม่ลงนาม token อีกแล้ว แถวที่สร้างใหม่ยัง redeem ไม่ได้จนกว่าจะกด Show QR ครั้งแรก
+
 ### Fixed
+- **ปุ่ม Issue ไม่ทำงานและไม่ฟ้องอะไรเลย** — ซ่อนวินาทีในช่อง expiry แต่ `min` พาวินาทีมาด้วย
+  เบราว์เซอร์จึง step ทีละ 60 วินาทีจากจุดที่มีเศษ ค่านาทีถ้วนทุกค่าตกกริดและไม่ผ่าน
+  native validation → ไม่มี request ถูกส่ง ไม่มี error ไม่มีแถวถูกสร้าง
+- **QR ไม่เคยถูกแสดง** — notification ถูกประกอบใหม่จาก array ระหว่างส่งไปเบราว์เซอร์
+  แล้ว Filament ทิ้ง view ที่ไม่อยู่ใน safe list โดยไม่บอก เจ้าหน้าที่เห็นแค่ข้อความว่าออก code สำเร็จ
+  · แก้ด้วยการย้าย QR ไปเป็น row action แทน transient notification
+- **Staff Portal ไม่มี CSS/JS** — `$host` ของ nginx ตัด port ทิ้ง Laravel จึงสร้าง asset URL
+  ไม่มี port และ Livewire ไม่ทำงาน · ส่ง `X-Forwarded-Port $server_port` (ไม่ใช่ port จาก
+  Host header ที่ client ปลอมได้)
 - **rate limit เป็น bucket เดียวทั้งระบบ** — nginx ไม่ส่ง X-Forwarded-For และไม่มี TrustProxies
   ทำให้ทุก request มาจาก IP ของ proxy · แก้ + ใช้ named limiter แยกตาม endpoint และผูกกับอุปกรณ์
 - **client ปลอม X-Forwarded-For เลี่ยง rate limit ได้** — `$proxy_add_x_forwarded_for` ต่อท้ายค่าที่

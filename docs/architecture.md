@@ -435,13 +435,31 @@ index: `(device_uuid_hmac)`, `(status)`, `(last_seen_at)`, `(driver_id)`
 
 ### 6.2 เจ้าหน้าที่ออก Activation Code
 
+แยกเป็น **2 จังหวะ** คือ *สร้าง code* กับ *แสดง QR* ไม่ใช่ขั้นตอนเดียว
+
 ```
-เจ้าหน้าที่ → POST /admin/activation-codes  { driver_id, note, expires_in }
-           ← { code: "A7K2-9QX4", qr_payload: <JWT>, expires_at }
+1. เจ้าหน้าที่กด "Issue code"
+   → สร้างแถว { code: "A7K2-9QX4", driver_id, expires_at }  token_hash ว่าง
+   → ยังใช้ลงทะเบียนไม่ได้ เพราะไม่มี token ให้ตรงกับ hash
+   → เขียน audit_logs `activation_code.created`
+
+2. เจ้าหน้าที่กด "Show QR" ตอนคนขับมายืนอยู่ตรงหน้า
+   → ออก JWT ใหม่ แล้วทับ token_hash เดิม
+   → แสดง QR บนจอ 1 ครั้ง
+   → เขียน audit_logs `activation_code.qr_shown` ทุกครั้งที่กด
 ```
-`qr_payload` = JWT ลงนามด้วย **ES256** (asymmetric — ห้ามใช้ HS256 เพราะ shared secret จะต้องอยู่ในแอป)
-claims: `aud=enroll`, `exp` +15 นาที, `jti`, `code`
-เก็บลง DB เฉพาะ `sha256(jwt)` เขียน `audit_logs`
+
+JWT ลงนามด้วย **ES256** (asymmetric — ห้ามใช้ HS256 เพราะ shared secret จะต้องอยู่ในแอป)
+claims: `aud=enroll`, `exp` = เวลาที่เหลือถึง `expires_at` ของแถว, `jti`, `code`
+เก็บลง DB **เฉพาะ `sha256(jwt)`**
+
+**`expires_at` ดีฟอลต์ +15 นาที** — คนขับยืนอยู่ตรงหน้าเจ้าหน้าที่ตอนออก code
+code ที่อายุยาวกว่านี้คือ code ที่ redeem ได้นอนค้างอยู่ใน DB โดยไม่มีเหตุผล
+
+**ทำไมต้องแยก 2 จังหวะ:** เก็บแค่ hash แปลว่าเอา QR เดิมกลับมาแสดงซ้ำไม่ได้ ไม่มีอะไรให้แสดง
+ถ้าโชว์ QR แค่ตอนสร้างครั้งเดียว เจ้าหน้าที่ที่เผลอปิดหน้าต่างต้อง revoke แล้วออกใหม่
+การให้กด "Show QR" ได้เรื่อยๆ โดยออก token ใหม่ทุกครั้ง **จึงเป็นทั้งช่องทางกู้คืนและยังคงเก็บแค่ hash ไว้เหมือนเดิม**
+ราคาที่จ่ายคือ QR ที่โชว์ไปก่อนหน้าใช้ไม่ได้ทันที — ต้องเขียนบอกบนหน้าจอให้ชัด
 
 **`driver_id` บังคับ** — ไม่มี code ลอยที่ยังไม่รู้ว่าออกให้ใคร
 ถ้าคนขับคนนั้นมีเครื่องใช้งานอยู่แล้ว ระบบต้องปฏิเสธการออก code ตั้งแต่ตรงนี้ (กฎ 1:1)

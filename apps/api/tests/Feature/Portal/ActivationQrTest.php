@@ -14,6 +14,7 @@ use App\Support\ActivationToken;
 use App\Support\Crypto\Hasher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Filament\Actions\Testing\TestAction;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
 use ReflectionMethod;
@@ -222,5 +223,30 @@ final class ActivationQrTest extends TestCase
             'action' => 'activation_code.qr_shown',
             'subject_id' => $code->getKey(),
         ]);
+    }
+
+    /**
+     * The expiry the form offers.
+     *
+     * Two things are being pinned. The window is fifteen minutes, because the
+     * driver is at the desk when the code is issued. And the value sits on a
+     * whole minute: seconds are hidden on this field, so the browser steps it by
+     * 60s from `min`, and a default off that grid fails native validation — the
+     * Issue button then does nothing at all, with no request and no error.
+     */
+    public function test_the_offered_expiry_is_fifteen_minutes_on_a_whole_minute(): void
+    {
+        Livewire::test(ListActivationCodes::class)
+            ->mountAction(TestAction::make('create'))
+            ->assertSchemaStateSet(function (array $state): array {
+                $expiry = Carbon::parse($state['expires_at']);
+
+                $this->assertSame(0, $expiry->second, 'The default must sit on a whole minute.');
+                $this->assertEqualsWithDelta(15, now()->diffInMinutes($expiry), 1);
+
+                // Asserted above; the helper needs an array back and has nothing
+                // left to compare.
+                return [];
+            });
     }
 }
