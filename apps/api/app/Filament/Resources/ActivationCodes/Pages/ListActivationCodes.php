@@ -7,11 +7,12 @@ namespace App\Filament\Resources\ActivationCodes\Pages;
 use App\Filament\Resources\ActivationCodes\ActivationCodeResource;
 use App\Filament\Support\StaffAudit;
 use App\Models\ActivationCode;
+use App\Support\ActivationToken;
 use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ListRecords;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Str;
 
 class ListActivationCodes extends ListRecords
 {
@@ -26,9 +27,25 @@ class ListActivationCodes extends ListRecords
             CreateAction::make()
                 ->label('Issue code')
                 ->modalSubmitActionLabel('Issue')
-                ->using(fn (array $data): ActivationCode => $this->issue($data)),
+                ->using(fn (array $data): ActivationCode => $this->issue($data))
+                ->successNotification(fn (): Notification => Notification::make()
+                    ->success()
+                    ->title('Activation code issued')
+                    ->body('Show this QR to the driver now. It cannot be displayed again.')
+                    ->persistent()
+                    ->view('filament.notifications.activation-qr', [
+                        'token' => $this->issuedToken,
+                    ])),
         ];
     }
+
+    /**
+     * The signed token, alive only for the request that created it.
+     *
+     * Deliberately not stored: the QR is the single copy handed to the driver,
+     * and a code that can be redisplayed is a code that can be redeemed twice.
+     */
+    private ?string $issuedToken = null;
 
     /** @param array<string, mixed> $data */
     private function issue(array $data): ActivationCode
@@ -36,18 +53,28 @@ class ListActivationCodes extends ListRecords
         return DB::transaction(function () use ($data): ActivationCode {
             $code = ActivationCode::create([
                 'code' => $this->generateCode(),
-                // TODO(enroll): issue signed ES256 QR JWT
-                // The real flow signs { aud: 'enroll', exp: +15m, jti, code } with
-                // the ES256 activation key, shows the JWT once as a QR code and
-                // stores only sha256(<jwt>) here (architecture.md §6.2).
-                // Until then this is the hash of a secret nobody holds, so the row
-                // is complete but no token can redeem it.
-                'token_hash' => hash('sha256', Str::random(64)),
+                // Overwritten below: the token can only be signed once the row
+                // exists, because its jti is the row's id.
+                'token_hash' => '',
                 'driver_id' => $data['driver_id'],
                 'created_by' => Filament::auth()->id(),
                 'expires_at' => $data['expires_at'],
                 'note' => $data['note'] ?? null,
             ]);
+
+            $issued = ActivationToken::make()->issue(
+                $code,
+                (int) now()->diffInMinutes($code->expires_at),
+            );
+
+            // Only the hash is kept. A database leak then hands out no usable
+            // codes, and the token itself exists in exactly one place: the QR
+            // shown to the driver right now (§6.2).
+            $code->update(['token_hash' => $issued['token_hash']]);
+
+            // Held for this request only so the notification can render the QR.
+            // Nothing persists it — reopening the page cannot show it again.
+            $this->issuedToken = $issued['token'];
 
             StaffAudit::log('activation_code.created', 'activation_code', $code->getKey(), [
                 'driver_id' => $data['driver_id'],

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Debug builds only. The MVP backend runs over plain HTTP on the office LAN,
+    and Android blocks cleartext by default since API 28.
+
+    Scoped to the one development host rather than allowing cleartext globally:
+    a blanket opt-in would follow the app into any build that inherits this file
+    and quietly disable TLS everywhere. Release builds never see this config, so
+    certificate pinning (architecture.md §6.7) applies unchanged.
+-->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">192.168.10.53</domain>
+    </domain-config>
+</network-security-config>
