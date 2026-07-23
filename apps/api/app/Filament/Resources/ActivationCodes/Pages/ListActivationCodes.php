@@ -7,7 +7,6 @@ namespace App\Filament\Resources\ActivationCodes\Pages;
 use App\Filament\Resources\ActivationCodes\ActivationCodeResource;
 use App\Filament\Support\StaffAudit;
 use App\Models\ActivationCode;
-use App\Support\ActivationToken;
 use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 use Filament\Notifications\Notification;
@@ -31,53 +30,32 @@ class ListActivationCodes extends ListRecords
                 ->successNotification(fn (): Notification => Notification::make()
                     ->success()
                     ->title('Activation code issued')
-                    ->body('Show this QR to the driver now. It cannot be displayed again.')
-                    ->persistent()
-                    // The view is on the safe list in AppServiceProvider, without
-                    // which Filament drops it on the way to the browser and the
-                    // notification arrives looking merely plain, with no QR.
-                    ->view('filament.notifications.activation-qr', [
-                        'token' => $this->issuedToken,
-                    ])),
+                    ->body('Press Show QR on the new row when the driver is in front of you.')),
         ];
     }
 
     /**
-     * The signed token, alive only for the request that created it.
+     * Creates the code itself. The QR comes later, from the row action.
      *
-     * Deliberately not stored: the QR is the single copy handed to the driver,
-     * and a code that can be redisplayed is a code that can be redeemed twice.
+     * No token is signed here: it would have to be shown immediately or thrown
+     * away, and a QR that appears once in a corner of the screen is a QR staff
+     * will miss. Show QR mints one on demand instead (§6.2).
+     *
+     * @param  array<string, mixed>  $data
      */
-    private ?string $issuedToken = null;
-
-    /** @param array<string, mixed> $data */
     private function issue(array $data): ActivationCode
     {
         return DB::transaction(function () use ($data): ActivationCode {
             $code = ActivationCode::create([
                 'code' => $this->generateCode(),
-                // Overwritten below: the token can only be signed once the row
-                // exists, because its jti is the row's id.
+                // No QR has been shown yet, so there is no token to hash. The
+                // code cannot be redeemed in this state, which is correct.
                 'token_hash' => '',
                 'driver_id' => $data['driver_id'],
                 'created_by' => Filament::auth()->id(),
                 'expires_at' => $data['expires_at'],
                 'note' => $data['note'] ?? null,
             ]);
-
-            $issued = ActivationToken::make()->issue(
-                $code,
-                (int) now()->diffInMinutes($code->expires_at),
-            );
-
-            // Only the hash is kept. A database leak then hands out no usable
-            // codes, and the token itself exists in exactly one place: the QR
-            // shown to the driver right now (§6.2).
-            $code->update(['token_hash' => $issued['token_hash']]);
-
-            // Held for this request only so the notification can render the QR.
-            // Nothing persists it — reopening the page cannot show it again.
-            $this->issuedToken = $issued['token'];
 
             StaffAudit::log('activation_code.created', 'activation_code', $code->getKey(), [
                 'driver_id' => $data['driver_id'],

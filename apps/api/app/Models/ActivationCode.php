@@ -29,6 +29,16 @@ class ActivationCode extends Model
         'token_hash',
     ];
 
+    /**
+     * Mirrors the column defaults so a freshly created model answers the same
+     * as one read back. Without these, max_uses is null on the instance create()
+     * returns and isUsable() reports a brand-new code as spent.
+     */
+    protected $attributes = [
+        'max_uses' => 1,
+        'used_count' => 0,
+    ];
+
     /** @return array<string, string> */
     protected function casts(): array
     {
@@ -38,6 +48,20 @@ class ActivationCode extends Model
             'used_count' => 'integer',
             'revoked_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Whether the code can still be redeemed.
+     *
+     * Says nothing about the token: enrollment checks that separately, because a
+     * code being usable and the presented token matching it are different
+     * questions.
+     */
+    public function isUsable(): bool
+    {
+        return $this->revoked_at === null
+            && $this->expires_at->isFuture()
+            && $this->used_count < $this->max_uses;
     }
 
     /** @return BelongsTo<Driver, $this> */

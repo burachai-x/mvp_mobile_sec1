@@ -58,9 +58,7 @@ final class EnrollController
 
         if ($code === null
             || ! ActivationToken::make()->matchesStoredHash($data['activation_token'], $code->token_hash)
-            || $code->revoked_at !== null
-            || $code->expires_at->isPast()
-            || $code->used_count >= $code->max_uses
+            || ! $code->isUsable()
         ) {
             return $this->codeUnusable($request);
         }

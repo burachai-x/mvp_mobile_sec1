@@ -7,6 +7,7 @@ namespace App\Filament\Resources\ActivationCodes;
 use App\Filament\Resources\ActivationCodes\Pages\ListActivationCodes;
 use App\Filament\Support\StaffAudit;
 use App\Models\ActivationCode;
+use App\Support\ActivationToken;
 use BackedEnum;
 use Filament\Actions\Action;
 use Filament\Facades\Filament;
@@ -79,6 +80,7 @@ class ActivationCodeResource extends Resource
             ])
             ->defaultSort('created_at', 'desc')
             ->recordActions([
+                static::showQrAction(),
                 static::revokeAction(),
             ]);
     }
@@ -103,6 +105,54 @@ class ActivationCodeResource extends Resource
         return [
             'index' => ListActivationCodes::route('/'),
         ];
+    }
+
+    /**
+     * Shows the driver's QR, minting the token it carries.
+     *
+     * Only a hash of the token is ever stored, so an existing QR cannot be
+     * redisplayed — there is nothing to redisplay from. Opening this therefore
+     * issues a fresh token for the same code and replaces the stored hash, which
+     * is also what makes it a usable recovery path: staff who close the window,
+     * or whose driver never scanned in time, press it again instead of revoking
+     * and starting over.
+     *
+     * The cost is that any QR shown earlier stops working, which the modal says
+     * plainly.
+     */
+    private static function showQrAction(): Action
+    {
+        return Action::make('showQr')
+            ->label('Show QR')
+            ->icon(Heroicon::OutlinedQrCode)
+            ->modalHeading('Activation QR')
+            ->modalDescription('Have the driver scan this now. Opening this again issues a new QR and stops this one working.')
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('Done')
+            ->visible(fn (ActivationCode $record): bool => $record->isUsable())
+            // Minted while the modal renders rather than on submit: the QR has to
+            // exist by the time staff see the window, and there is no second step
+            // for them to take.
+            ->modalContent(fn (ActivationCode $record) => view(
+                'filament.notifications.activation-qr',
+                ['token' => static::mintToken($record)],
+            ));
+    }
+
+    private static function mintToken(ActivationCode $record): string
+    {
+        return DB::transaction(function () use ($record): string {
+            $issued = ActivationToken::make()->issue(
+                $record,
+                (int) now()->diffInMinutes($record->expires_at),
+            );
+
+            $record->update(['token_hash' => $issued['token_hash']]);
+
+            StaffAudit::log('activation_code.qr_shown', 'activation_code', $record->getKey());
+
+            return $issued['token'];
+        });
     }
 
     private static function revokeAction(): Action
