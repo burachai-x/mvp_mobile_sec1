@@ -27,9 +27,14 @@ CN = mvp-dev-api
 basicConstraints = critical,CA:FALSE
 keyUsage = critical,digitalSignature,keyEncipherment
 extendedKeyUsage = serverAuth
-# ต้องมี IP SAN เพราะแอปต่อด้วยหมายเลข IP ไม่ใช่ชื่อโฮสต์
-# ไม่มี IP SAN = hostname verification ไม่ผ่าน ตั้งแต่ก่อนถึงขั้นตรวจ pin
-subjectAltName = IP:${HOST_IP},DNS:localhost,IP:127.0.0.1
+# สามชื่อบนพอร์ต 443 เดียวกัน แยกด้วย SNI — พอร์ตเดียวเสิร์ฟหลาย host
+# ได้ก็ต่อเมื่อแยกด้วยชื่อ ไม่ใช่ด้วยเลขพอร์ต
+#
+# ใช้ nip.io เพราะชื่อมี IP อยู่ในตัวและ resolve ผ่าน DNS สาธารณะ
+# มือถือจึงใช้ได้โดยไม่ต้องแก้ /etc/hosts ซึ่งบนเครื่องที่ไม่ root ทำไม่ได้
+#
+# คง IP SAN ไว้ด้วย เผื่อเรียกด้วยหมายเลขตรงๆ ตอนไล่ปัญหา
+subjectAltName = DNS:api.${HOST_IP}.nip.io,DNS:staff.${HOST_IP}.nip.io,DNS:dl.${HOST_IP}.nip.io,IP:${HOST_IP},DNS:localhost,IP:127.0.0.1
 CNF
 
 echo "==> CA"

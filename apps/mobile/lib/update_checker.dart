@@ -16,11 +16,17 @@ class UpdateChecker {
     required this.manifestUrl,
     required this.verifier,
     required this.installedVersionCode,
+    this.securityContext,
   });
 
   final String manifestUrl;
   final ManifestVerifier verifier;
   final int installedVersionCode;
+
+  /// Extra trust anchors, for a dev host served by a private CA. Null in every
+  /// real build, where the update host carries a certificate the phone already
+  /// trusts. Not pinning — the update host must never be pinned (§11.5).
+  final SecurityContext? securityContext;
 
   /// Returns the verified manifest, or null if there is nothing to act on.
   ///
@@ -46,7 +52,8 @@ class UpdateChecker {
   }
 
   Future<String> _fetch() async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 15);
+    final client = HttpClient(context: securityContext)
+      ..connectionTimeout = const Duration(seconds: 15);
 
     try {
       final request = await client.getUrl(Uri.parse(manifestUrl));

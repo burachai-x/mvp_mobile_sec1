@@ -41,7 +41,11 @@ class InstallRefused implements Exception {
 /// installer. Handing over a file before the checks would make every earlier
 /// one decorative — the manifest can be perfect while the file served is not.
 class UpdateInstaller {
-  const UpdateInstaller();
+  const UpdateInstaller({this.securityContext});
+
+  /// Extra trust anchors for a dev host served by a private CA. Null in every
+  /// real build. Not pinning — see UpdateChecker.
+  final SecurityContext? securityContext;
 
   static const _channel = MethodChannel('co.th.gbtech.driver_app/keystore');
 
@@ -126,7 +130,8 @@ class UpdateInstaller {
     // Not pinned, deliberately: this is the channel that repairs an app which
     // can no longer reach the API, and its safety comes from the signature on
     // the manifest that named this file (§11.5).
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 20);
+    final client = HttpClient(context: securityContext)
+      ..connectionTimeout = const Duration(seconds: 20);
 
     try {
       final response = await (await client.getUrl(Uri.parse(manifest.apkUrl))).close();

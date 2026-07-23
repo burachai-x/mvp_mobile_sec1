@@ -161,6 +161,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
         manifestUrl: ApiConfig.manifestUrl,
         verifier: verifier,
         installedVersionCode: int.parse(ApiConfig.appVersion),
+        securityContext: ApiConfig.securityContext(),
       ).check(state);
 
       // The manifest may have turned pinning off since the stored state was
@@ -501,7 +502,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
 
       return UpdateScreen(
         manifest: update,
-        installer: const UpdateInstaller(),
+        installer: UpdateInstaller(securityContext: ApiConfig.securityContext()),
         mandatory: mandatory,
         onSkip: mandatory ? null : () => setState(() => _updateSkipped = true),
       );

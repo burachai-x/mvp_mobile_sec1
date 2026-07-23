@@ -52,7 +52,11 @@ openssl s_client -connect api.example.com:443 -servername api.example.com </dev/
 ## 1.5 ทดสอบบนเครื่อง dev
 
 `scripts/dev-tls.sh` สร้าง CA + cert ของ dev (มี IP SAN ของเครื่อง) แล้วพิมพ์ pin ทั้งสองตัวออกมา
-nginx เสิร์ฟ API ผ่าน TLS ที่ **:8443** โดย mount cert เข้าไป ไม่ได้ COPY ลง image
+nginx เสิร์ฟทั้งหมดที่ **:443** แยกช่องทางด้วยชื่อโฮสต์ (SNI) ส่วน **:80** redirect ไป https
+cert mount เข้าไป ไม่ได้ COPY ลง image
+
+ชื่อ dev ใช้ nip.io — ชื่อมี IP อยู่ในตัวและ resolve ผ่าน DNS สาธารณะ มือถือจึงใช้ได้
+โดยไม่ต้องแก้ `/etc/hosts` ซึ่งบนเครื่องที่ไม่ root ทำไม่ได้
 
 ```bash
 ./scripts/dev-tls.sh
@@ -63,14 +67,14 @@ docker compose up -d nginx
 
 ```bash
 curl --cacert docker/nginx/dev-tls/dev-ca.crt \
-  -H "X-App-Signature: <sig>" https://<ip>:8443/api/v1/health
+  -H "X-App-Signature: <sig>" https://api.<ip>.nip.io/api/v1/health
 ```
 
 ตรวจตรรกะ pin กับ handshake จริงด้วยโค้ดชุดเดียวกับที่แอปใช้:
 
 ```bash
 cd apps/mobile
-dart run tool/check_pin.dart <ip> 8443 ../../docker/nginx/dev-tls/dev-ca.crt <pin1>,<pin2>
+dart run tool/check_pin.dart api.<ip>.nip.io 443 ../../docker/nginx/dev-tls/dev-ca.crt <pin1>,<pin2>
 ```
 
 ควรได้ครบ 3 เคส — pin ถูก `accepted: true`, pin ผิด `accepted: false`,

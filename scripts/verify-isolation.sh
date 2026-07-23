@@ -79,14 +79,17 @@ $DC exec -T api    sh -c 'nc -z -w2 postgres 5432' >/dev/null 2>&1 && pass "api 
 
 echo
 echo "== ชั้น 4: route ที่ลงทะเบียนจริง =="
-api_staff=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://localhost:${API_PORT:-8080}/staff" || echo 000)
-# ส่ง X-App-Signature ไปด้วย: เมื่อ allowlist ถูกตั้งค่าแล้ว route นี้จะตอบ 403
-# ทั้งที่ลงทะเบียนอยู่จริง ซึ่งเป็นคนละเรื่องกับที่สคริปต์นี้ตรวจ — ที่ตรวจคือ
-# แต่ละ container ลงทะเบียน route ของ role ตัวเองเท่านั้น (ADR 0007)
+# แยกด้วยชื่อโฮสต์บนพอร์ต 443 เดียว จึงต้องยิงด้วยชื่อ ไม่ใช่เลขพอร์ต
+CA=docker/nginx/dev-tls/dev-ca.crt
+BASE=${HOST_IP:-192.168.10.53}.nip.io
 api_sig=$(printf '%s' "${APP_SIGNATURE_SHA256_ALLOWLIST:-}" | cut -d, -f1)
-api_health=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -H "X-App-Signature: ${api_sig}" "http://localhost:${API_PORT:-8080}/api/v1/health" || echo 000)
-portal_login=$(curl -s -o /dev/null -w '%{http_code}' -m 10 "http://localhost:${STAFF_PORT:-8081}/staff/login" || echo 000)
-portal_api=$(curl -s -o /dev/null -w '%{http_code}' -m 10 -H "X-App-Signature: ${api_sig}" "http://localhost:${STAFF_PORT:-8081}/api/v1/health" || echo 000)
+
+ask() { curl -s -o /dev/null -w '%{http_code}' -m 10 --cacert "$CA" -H "X-App-Signature: ${api_sig}" "$1" || echo 000; }
+
+api_staff=$(ask "https://api.${BASE}/staff")
+api_health=$(ask "https://api.${BASE}/api/v1/health")
+portal_login=$(ask "https://staff.${BASE}/staff/login")
+portal_api=$(ask "https://staff.${BASE}/api/v1/health")
 
 [ "$api_staff"    = "404" ] && pass "api /staff = 404"              || bad "api /staff = $api_staff (ต้อง 404)"
 [ "$api_health"   = "200" ] && pass "api /api/v1/health = 200"      || bad "api /api/v1/health = $api_health"
