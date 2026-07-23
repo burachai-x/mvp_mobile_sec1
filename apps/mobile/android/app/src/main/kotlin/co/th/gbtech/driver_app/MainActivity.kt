@@ -100,7 +100,16 @@ class MainActivity : FlutterFragmentActivity() {
     private fun reply(result: MethodChannel.Result, outcome: Result<String>) {
         outcome.fold(
             onSuccess = { result.success(it) },
-            onFailure = { result.error(it.message ?: "failed", it.message, null) },
+            onFailure = { error ->
+                // Only codes Dart knows how to act on. Passing an exception
+                // message through as the code meant anything unforeseen arrived
+                // as an unrecognised value and was treated as a retryable
+                // "finger not recognised", which some failures never are.
+                val known = setOf("cancelled", "lockout", "none_enrolled", "invalidated", "unusable")
+                val code = error.message.takeIf { it in known } ?: "failed"
+
+                result.error(code, error.message, null)
+            },
         )
     }
 }

@@ -109,7 +109,7 @@ object BiometricVault {
         val probe = Cipher.getInstance(TRANSFORMATION)
 
         try {
-            probe.init(Cipher.DECRYPT_MODE, privateKey(), decryptSpec())
+            probe.init(Cipher.DECRYPT_MODE, privateKey(), oaepSpec())
         } catch (e: Throwable) {
             clear()
             onResult(Result.failure(IllegalStateException("failed")))
@@ -141,8 +141,13 @@ object BiometricVault {
         val publicKey = KeyFactory.getInstance("RSA")
             .generatePublic(X509EncodedKeySpec(stored.encoded))
 
+        // The same OAEP parameters as decryption, spelled out rather than left
+        // to the provider. Providers disagree on the MGF1 digest — the default
+        // provider picks SHA-256 while AndroidKeyStore wants SHA-1 — and the
+        // mismatch only shows up at decryption, as a padding error that reads
+        // exactly like a fingerprint that was not recognised.
         val cipher = Cipher.getInstance(TRANSFORMATION).apply {
-            init(Cipher.ENCRYPT_MODE, publicKey)
+            init(Cipher.ENCRYPT_MODE, publicKey, oaepSpec())
         }
 
         return Base64.encodeToString(cipher.doFinal(secret.toByteArray()), Base64.NO_WRAP)
@@ -152,7 +157,7 @@ object BiometricVault {
     fun unlock(activity: FragmentActivity, sealed: String, onResult: (Result<String>) -> Unit) {
         val cipher = try {
             Cipher.getInstance(TRANSFORMATION).apply {
-                init(Cipher.DECRYPT_MODE, privateKey(), decryptSpec())
+                init(Cipher.DECRYPT_MODE, privateKey(), oaepSpec())
             }
         } catch (_: KeyPermanentlyInvalidatedException) {
             // A fingerprint was added or removed since enrolling. The sealed
@@ -173,9 +178,22 @@ object BiometricVault {
 
         prompt(activity, cipher, "Unlock") { result ->
             onResult(
-                result.mapCatching { authenticated ->
-                    String(authenticated.doFinal(Base64.decode(sealed, Base64.NO_WRAP)))
-                }
+                result.fold(
+                    onSuccess = { authenticated ->
+                        try {
+                            Result.success(String(authenticated.doFinal(Base64.decode(sealed, Base64.NO_WRAP))))
+                        } catch (_: Throwable) {
+                            // The finger was accepted and the key ran; what was
+                            // stored simply cannot be opened — wrong padding
+                            // parameters, or a value left by an older build.
+                            // Reporting this as a failed prompt would tell the
+                            // driver to press their finger again forever.
+                            clear()
+                            Result.failure(IllegalStateException("unusable"))
+                        }
+                    },
+                    onFailure = { Result.failure(it) },
+                )
             )
         }
     }
@@ -185,11 +203,14 @@ object BiometricVault {
             ?: throw IllegalStateException("no_key")
 
     /**
-     * AndroidKeyStore reads the OAEP digest from the transformation but leaves
-     * MGF1 on SHA-1, so the parameters have to be spelled out or decryption
-     * fails with a padding error that looks like a wrong key.
+     * Used for both directions.
+     *
+     * AndroidKeyStore reads the OAEP digest from the transformation name but
+     * leaves MGF1 on SHA-1, while other providers default it to SHA-256. Unless
+     * both sides state it, sealing and opening disagree and the only symptom is
+     * a padding error at decryption.
      */
-    private fun decryptSpec() = OAEPParameterSpec(
+    private fun oaepSpec() = OAEPParameterSpec(
         "SHA-256",
         "MGF1",
         MGF1ParameterSpec.SHA1,
