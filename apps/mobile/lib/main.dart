@@ -9,6 +9,7 @@ import 'app_lock.dart';
 import 'api_config.dart';
 import 'device_key.dart';
 import 'enrollment.dart';
+import 'integrity_warning.dart';
 import 'lock_screen.dart';
 import 'update_checker.dart';
 import 'update_manifest.dart';
@@ -67,6 +68,10 @@ class _EnrollScreenState extends State<EnrollScreen> {
   EnrollmentResult? _enrollment;
   String? _error;
   Map<String, bool> _integrity = const {};
+
+  /// Reset every launch on purpose. A warning acknowledged last week says
+  /// nothing about the phone the driver is holding now.
+  bool _integrityAcknowledged = false;
   final _log = <String>[];
 
   @override
@@ -237,6 +242,23 @@ class _EnrollScreenState extends State<EnrollScreen> {
     }
   }
 
+  bool _recheckingIntegrity = false;
+
+  /// Re-reads the signals so a driver who just turned debugging off is let
+  /// through without restarting the app.
+  Future<void> _recheckIntegrity() async {
+    setState(() => _recheckingIntegrity = true);
+
+    final signals = await DeviceKey.integritySignals();
+
+    if (mounted) {
+      setState(() {
+        _integrity = signals;
+        _recheckingIntegrity = false;
+      });
+    }
+  }
+
   Future<void> _scan() async {
     final token = await Navigator.of(context).push<String>(
       MaterialPageRoute(builder: (_) => const ScanScreen()),
@@ -377,6 +399,17 @@ class _EnrollScreenState extends State<EnrollScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Ahead of the lock screen, so the driver reads it before typing a PIN into
+    // a phone that may be watched. It never blocks — see IntegrityWarning.
+    if (_step != _Step.loading && !_integrityAcknowledged && _flaggedSignals.isNotEmpty) {
+      return IntegrityWarning(
+        signals: _flaggedSignals,
+        busy: _recheckingIntegrity,
+        onRecheck: _recheckIntegrity,
+        onContinue: () => setState(() => _integrityAcknowledged = true),
+      );
+    }
+
     // Replaces the whole scaffold rather than sitting inside it: the app bar
     // carries a button that clears the device key, which must not be reachable
     // before the driver has unlocked.

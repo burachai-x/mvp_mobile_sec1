@@ -1188,6 +1188,8 @@ components:
         su_binary_found: { type: boolean }
         test_keys: { type: boolean, description: build signed ด้วย test-keys }
         developer_options: { type: boolean }
+        usb_debugging: { type: boolean, description: อ่านจาก Settings.Global ADB_ENABLED }
+        wireless_debugging: { type: boolean, description: adb ผ่านเครือข่าย (Android 11+) }
         emulator: { type: boolean }
         mock_location: { type: boolean }
         debugger_attached: { type: boolean }

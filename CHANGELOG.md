@@ -37,6 +37,9 @@
 - **ปลดล็อกด้วยลายนิ้วมือ** — refresh token ถูกเข้ารหัสด้วย key ใน Keystore ที่ TEE ไม่ยอมรันจนกว่า
   ลายนิ้วมือจะผ่าน (`setUserAuthenticationRequired`) และ key จะถูกทำลายเมื่อมีการเพิ่ม/ลบลายนิ้วมือ
 - `POST /auth/refresh` — มีใน `openapi.yaml` มาตั้งแต่ต้นแต่ยังไม่เคย implement
+- **ตรวจ USB Debugging / Wireless Debugging / Developer Options** อ่านจาก `Settings.Global`
+  และ **หน้าเตือนภาษาไทย** ก่อนหน้าล็อก บอกว่าเจออะไรพร้อมวิธีปิด เลือก *ตรวจอีกครั้ง*
+  หรือ *ใช้งานต่อ* ได้ — เตือน ไม่ปิดแอป (ปิดข้อขัดแย้ง PRD §2.2 กับ CLAUDE.md §6)
 - **Root / hook / emulator / debugger detection** ฝั่งแอป — ส่งขึ้น server ตอน enroll
   และแสดงบนหน้าจอ · server ใช้ขยับ risk score เท่านั้น ไม่ตัดสินใจแทน (§4.1)
 - **Kill switch ของ certificate pinning** — ปิด pinning จากระยะไกลได้ผ่าน manifest ที่ลงนามแล้วเท่านั้น

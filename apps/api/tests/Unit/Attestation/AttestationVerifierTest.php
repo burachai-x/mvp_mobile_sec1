@@ -102,11 +102,39 @@ final class AttestationVerifierTest extends TestCase
 
         $result = $this->verifier($root)->assess(
             ['certificate_chain' => $chain],
-            ['rooted' => true, 'hook_framework_detected' => true, 'emulator' => true, 'debugger_attached' => true],
+            // Every one of them at once, including the debugging settings. The
+            // ceiling has to hold no matter how many flags exist, because the
+            // list grows and each addition looks harmless on its own.
+            [
+                'rooted' => true,
+                'hook_framework_detected' => true,
+                'emulator' => true,
+                'debugger_attached' => true,
+                'usb_debugging' => true,
+                'wireless_debugging' => true,
+                'developer_options' => true,
+            ],
             self::CHALLENGE,
         );
 
         $this->assertNotSame('block', $result['action']);
+        $this->assertLessThan(50, $result['risk_score']);
+    }
+
+    /** Debugging left on is recorded, and is the kind a driver can act on. */
+    public function test_debugging_settings_are_reported_as_reasons(): void
+    {
+        ['root' => $root, 'chain' => $chain] = FakeAttestation::chain(self::CHALLENGE);
+
+        $result = $this->verifier($root)->assess(
+            ['certificate_chain' => $chain],
+            ['usb_debugging' => true, 'wireless_debugging' => true],
+            self::CHALLENGE,
+        );
+
+        $this->assertContains('usb_debugging', $result['reasons']);
+        $this->assertContains('wireless_debugging', $result['reasons']);
+        $this->assertSame('allow', $result['action']);
     }
 
     /** Monitor mode records the problem and lets the device through (§4.2). */

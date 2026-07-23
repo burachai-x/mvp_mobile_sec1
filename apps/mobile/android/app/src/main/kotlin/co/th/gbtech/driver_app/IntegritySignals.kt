@@ -3,6 +3,7 @@ package co.th.gbtech.driver_app
 import android.content.Context
 import android.os.Build
 import android.os.Debug
+import android.provider.Settings
 import java.io.File
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -25,13 +26,45 @@ import java.net.Socket
  */
 object IntegritySignals {
 
-    /** Keys match what the server scores; adding one here needs the server too. */
+    /** Keys match docs/api/openapi.yaml `IntegritySignals`. */
     fun collect(context: Context): Map<String, Boolean> = mapOf(
         "rooted" to isRooted(),
+        "su_binary_found" to SU_PATHS.any { exists(it) },
+        "test_keys" to (Build.TAGS?.contains("test-keys") == true),
         "hook_framework_detected" to hasHookFramework(),
         "emulator" to isEmulator(),
         "debugger_attached" to isDebuggerAttached(),
+        "developer_options" to developerOptionsEnabled(context),
+        "usb_debugging" to usbDebuggingEnabled(context),
+        "wireless_debugging" to wirelessDebuggingEnabled(context),
     )
+
+    // ── developer settings ──────────────────────────────────────────────────
+    //
+    // Read straight from Settings.Global, so unlike the root checks these are
+    // not guesses — they are what the system says about itself. Still not proof
+    // of anything: a rooted phone can lie about them like anything else. What
+    // makes them worth showing is that the driver can act on them.
+
+    private fun developerOptionsEnabled(context: Context): Boolean =
+        setting(context, Settings.Global.DEVELOPMENT_SETTINGS_ENABLED)
+
+    /** USB debugging. Lets anyone with a cable read app data and drive the app. */
+    private fun usbDebuggingEnabled(context: Context): Boolean =
+        setting(context, Settings.Global.ADB_ENABLED)
+
+    /**
+     * The same over the network, added in Android 11. Worse than the cable: it
+     * needs no physical access, and the key is not a public constant.
+     */
+    private fun wirelessDebuggingEnabled(context: Context): Boolean =
+        setting(context, "adb_wifi_enabled")
+
+    private fun setting(context: Context, key: String): Boolean = try {
+        Settings.Global.getInt(context.contentResolver, key, 0) == 1
+    } catch (_: Throwable) {
+        false
+    }
 
     // ── root ────────────────────────────────────────────────────────────────
 

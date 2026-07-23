@@ -28,6 +28,26 @@ final class AttestationVerifier
      * @param  array<string, mixed>  $integrity
      * @return array{risk_score: int, action: string, reasons: list<string>, chain_verified: bool, attested: array<string, mixed>}
      */
+    /**
+     * Flags the device reports about itself, none of which are evidence.
+     *
+     * Debugging settings are read from Settings.Global rather than guessed, so
+     * they are honest on an honest phone — but a phone able to hide root can
+     * hide these too.
+     */
+    private const SELF_REPORTED = [
+        'rooted',
+        'hook_framework_detected',
+        'emulator',
+        'debugger_attached',
+        'usb_debugging',
+        'wireless_debugging',
+        'developer_options',
+    ];
+
+    /** Below the blocking threshold, so these can never reach it together. */
+    private const SELF_REPORTED_CEILING = 40;
+
     public function assess(array $attestation, array $integrity = [], ?string $expectedChallenge = null): array
     {
         $reasons = [];
@@ -93,12 +113,20 @@ final class AttestationVerifier
 
         // Self-reported and forgeable, so these only nudge the score. They never
         // decide on their own (§4.1).
-        foreach (['rooted', 'hook_framework_detected', 'emulator', 'debugger_attached'] as $flag) {
+        //
+        // The cap is what enforces that. Counting on there being few enough
+        // flags to stay under the blocking threshold breaks the moment another
+        // one is added — and adding one looks harmless.
+        $selfReported = 0;
+
+        foreach (self::SELF_REPORTED as $flag) {
             if (($integrity[$flag] ?? false) === true) {
                 $reasons[] = $flag;
-                $score += 10;
+                $selfReported += 10;
             }
         }
+
+        $score += min($selfReported, self::SELF_REPORTED_CEILING);
 
         return [
             'risk_score' => min($score, 100),

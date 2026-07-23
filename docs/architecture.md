@@ -112,16 +112,25 @@ Magisk Hide / Zygisk / Frida ทำให้ผลตรวจฝั่ง clien
 | `hook_framework_detected` | ชื่อ library ใน `/proc/self/maps` · พอร์ต 27042 ของ frida-server · คลาส Xposed/Substrate ใน stack trace |
 | `emulator` | `Build.FINGERPRINT` / `MODEL` / `PRODUCT` / `HARDWARE` |
 | `debugger_attached` | `Debug.isDebuggerConnected()` |
+| `developer_options` | `Settings.Global.DEVELOPMENT_SETTINGS_ENABLED` |
+| `usb_debugging` | `Settings.Global.ADB_ENABLED` |
+| `wireless_debugging` | `Settings.Global` คีย์ `adb_wifi_enabled` (Android 11+) |
 
-**🔴 ยังไม่ได้ทำ: "พบแล้วปิดแอป" ตามที่ PRD §2.2 เขียนไว้**
+**ข้อขัดแย้งกับ PRD §2.2 — ตัดสินใจแล้ว: เตือน ไม่ปิดแอป**
 
-`CLAUDE.md` §6 ห้ามเขียนโค้ดที่ block หรือ allow โดยดูจาก `IntegritySignals` อย่างเดียว
-ซึ่งการปิดแอปเองก็คือการ block ด้วย signal ที่ปลอมได้ — ผลคือลงโทษคนขับที่เครื่องรายงานตามจริง
-ส่วนคนที่ซ่อนไว้ผ่านฉลุย และคนที่ตั้งใจโจมตีก็แค่ patch เช็คนี้ทิ้ง
+PRD §2.2 เขียนว่าพบ root แล้วให้ปิดแอป แต่ `CLAUDE.md` §6 ห้าม block จาก `IntegritySignals`
+อย่างเดียว ผู้ตัดสินใจเลือก **"แจ้งเตือน"** — แอปแสดงหน้าเตือนก่อนหน้าล็อก บอกว่าตรวจพบอะไร
+พร้อมวิธีปิด USB/Wireless Debugging แล้วให้เลือก *ตรวจอีกครั้ง* หรือ *ใช้งานต่อ*
 
-**สองข้อนี้ขัดกันจริง ต้องให้ผู้ตัดสินใจเลือก** ตาม §9 — ยังไม่เลือกให้เอง
-ถ้าจะทำ ควรทำเป็น flag ที่สั่งได้จาก signed manifest (เหมือน kill switch ของ pinning)
-ไม่ใช่ hardcode เพราะการปล่อยแอปใหม่ต้องผ่าน sideload
+เหตุผลที่ไม่ปิดแอป: signal พวกนี้ปลอมได้ การปิดแอปจึงลงโทษเครื่องที่รายงานตามจริง
+ส่วนเครื่องที่ซ่อนไว้ผ่านฉลุย และคนที่ตั้งใจโจมตีก็แค่ patch เช็คทิ้ง
+ผลสุทธิคือคนขับสุจริตทำงานไม่ได้กลางกะ โดยที่ผู้โจมตีไม่ได้เดือดร้อน
+
+การตัดสินใจ block จริงยังเป็นของ server ซึ่งดูจาก `key_attestation` เป็นหลัก (§4.2)
+
+**เพดานคะแนน:** `AttestationVerifier` จำกัดคะแนนรวมจาก signal ที่ client รายงานไว้ที่ **40**
+ซึ่งต่ำกว่าเกณฑ์ block (50) — ทำให้ signal ที่ปลอมได้ **ไม่มีทางดันถึงเกณฑ์ block ได้เอง**
+ไม่ว่าจะเพิ่ม signal อีกกี่ตัวก็ตาม (เดิมพึ่งการนับว่ามีไม่กี่ตัว ซึ่งพังทันทีที่เพิ่มตัวที่ห้า)
 
 ---
 
