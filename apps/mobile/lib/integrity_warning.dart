@@ -1,15 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-/// Shown before the lock screen when the device reports something risky.
+/// Signals that mean the platform underneath the app cannot be trusted.
 ///
-/// It warns and does not block. These signals are self-reported and anything
-/// able to act on them can also hide them, so refusing to start would punish
-/// the honest phone that answers truthfully while a concealed one walks
-/// straight through (CLAUDE.md §6). The server is told either way and decides
-/// what it wants to do about the device.
+/// A driver cannot undo any of these from a settings screen, so there is
+/// nothing to tell them to fix — the app stops and staff take a look.
+const fatalSignals = {
+  'rooted',
+  'su_binary_found',
+  'test_keys',
+  'hook_framework_detected',
+  'emulator',
+};
+
+/// Whether the flags found mean the app must not run at all.
+bool signalsAreFatal(Iterable<String> signals) => signals.any(fatalSignals.contains);
+
+/// Shown ahead of everything when the device reports something risky.
 ///
-/// Debugging is called out separately from root because it is the part a driver
-/// can actually fix, in about four taps.
+/// Two outcomes, because the two kinds of finding are not alike. Debugging left
+/// on is a setting the driver can turn off in four taps, so it warns and lets
+/// them carry on; a rooted or hooked platform is not theirs to repair, so the
+/// app closes.
+///
+/// None of this is evidence. These signals are self-reported, and anything able
+/// to act on them can also hide them — someone who meant harm patches the check
+/// out and never sees this screen. What it reliably does is keep an honest
+/// phone in a known state and tell the driver how to get there.
+///
+/// The server is never bound by it. It scores the same signals but can only
+/// ever reach a warning from them, because a forgeable value must not decide
+/// whether a device is blocked (CLAUDE.md §6).
 class IntegrityWarning extends StatelessWidget {
   const IntegrityWarning({
     super.key,
@@ -26,104 +47,204 @@ class IntegrityWarning extends StatelessWidget {
   final VoidCallback onContinue;
   final bool busy;
 
+  bool get _fatal => signalsAreFatal(signals);
+
+  /// Short enough to sit on one line each. Thai does not break on spaces the
+  /// way Flutter's line breaker expects, so a long sentence wraps in the middle
+  /// of a word — every string here is either short or broken by hand.
   static const _labels = <String, String>{
     'usb_debugging': 'เปิด USB Debugging อยู่',
     'wireless_debugging': 'เปิด Wireless Debugging อยู่',
-    'developer_options': 'เปิดตัวเลือกนักพัฒนา (Developer Options) อยู่',
-    'rooted': 'เครื่องนี้ถูกปลดล็อกสิทธิ์ (root)',
+    'developer_options': 'เปิดตัวเลือกนักพัฒนาอยู่',
+    'debugger_attached': 'มีตัวดีบักเชื่อมต่ออยู่',
+    'rooted': 'เครื่องถูกปลดล็อกสิทธิ์ (root)',
     'su_binary_found': 'พบไฟล์ su บนเครื่อง',
-    'test_keys': 'ระบบปฏิบัติการไม่ได้ลงนามด้วยกุญแจของผู้ผลิต',
+    'test_keys': 'ระบบไม่ได้ลงนามโดยผู้ผลิต',
     'hook_framework_detected': 'พบเครื่องมือดักแก้การทำงานของแอป',
     'emulator': 'กำลังทำงานบนโปรแกรมจำลอง',
-    'debugger_attached': 'มีตัวดีบักเชื่อมต่ออยู่',
   };
-
-  bool get _hasDebugging => signals.any(
-        (s) => s == 'usb_debugging' || s == 'wireless_debugging' || s == 'developer_options',
-      );
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('คำเตือนความปลอดภัย'),
-        automaticallyImplyLeading: false,
-      ),
+      backgroundColor: Colors.white,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 16, 24, 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(Icons.warning_amber_rounded, size: 64, color: Colors.amber.shade700),
-              const SizedBox(height: 16),
-              const Text(
-                'ตรวจพบความเสี่ยงบนเครื่องนี้',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 20),
-              ...signals.map(
-                (signal) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('•  '),
-                      Expanded(child: Text(_labels[signal] ?? signal)),
-                    ],
+              // The content takes what is left after the buttons, and scrolls
+              // only if it genuinely cannot fit. An earlier version squeezed
+              // the list into a fixed share of the screen, which silently
+              // overflowed and printed the guidance on top of the findings once
+              // there were four of them.
+              Expanded(
+                child: LayoutBuilder(
+                  builder: (context, constraints) => SingleChildScrollView(
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          _icon(),
+                          const SizedBox(height: 20),
+                          Text(
+                            _fatal ? 'ไม่สามารถใช้งานต่อได้' : 'ตรวจพบความเสี่ยง',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                                fontSize: 22, fontWeight: FontWeight.w700, height: 1.3),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            _fatal
+                                ? 'เครื่องนี้ไม่ปลอดภัยพอสำหรับใช้งาน'
+                                : 'ควรปิดการตั้งค่าเหล่านี้ก่อนใช้งาน',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
+                          ),
+                          const SizedBox(height: 22),
+                          _findings(),
+                          const SizedBox(height: 22),
+                          _guidance(),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
-              if (_hasDebugging) ...[
-                const Text(
-                  'วิธีปิด USB Debugging และ Wireless Debugging',
-                  style: TextStyle(fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  '1. เปิดการตั้งค่าของเครื่อง\n'
-                  '2. เลือก ตัวเลือกนักพัฒนา (Developer Options)\n'
-                  '    ถ้าไม่เห็นเมนูนี้ ให้ไปที่ เกี่ยวกับโทรศัพท์ (About Phone)\n'
-                  '    แล้วกด เวอร์ชันอุปกรณ์ (Build Number) 7 ครั้ง\n'
-                  '3. ปิด USB Debugging และ Wireless Debugging\n'
-                  '4. กลับมาที่แอปแล้วกด ตรวจอีกครั้ง',
-                  style: TextStyle(height: 1.6),
-                ),
-                const SizedBox(height: 20),
-              ],
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Text(
-                  'ระบบได้บันทึกผลตรวจนี้ไว้แล้ว และแจ้งให้เจ้าหน้าที่ทราบ',
-                  style: TextStyle(fontSize: 12),
-                ),
-              ),
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: busy ? null : onRecheck,
-                child: busy
-                    ? const SizedBox(
-                        height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('ตรวจอีกครั้ง'),
-              ),
-              const SizedBox(height: 8),
-              // Present because blocking would achieve nothing against anyone
-              // who meant harm, and would strand a driver mid-shift over a
-              // setting they may not be able to change.
-              TextButton(
-                onPressed: busy ? null : onContinue,
-                child: const Text('รับทราบ ใช้งานต่อ'),
-              ),
+              const SizedBox(height: 16),
+              ..._actions(),
             ],
           ),
         ),
       ),
     );
   }
+
+  List<Widget> _actions() {
+    if (_fatal) {
+      return [
+        SizedBox(
+          height: 52,
+          child: FilledButton(
+            // The only way out. Reopening the app is what re-runs the checks.
+            onPressed: () => SystemNavigator.pop(),
+            child: const Text('ปิดแอป', style: TextStyle(fontSize: 16)),
+          ),
+        ),
+      ];
+    }
+
+    return [
+      SizedBox(
+        height: 52,
+        child: FilledButton(
+          // Re-reads the signals in place, so a driver who just turned
+          // debugging off does not have to work out that a restart is needed.
+          onPressed: busy ? null : onRecheck,
+          child: busy
+              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('ตรวจอีกครั้ง', style: TextStyle(fontSize: 16)),
+        ),
+      ),
+      const SizedBox(height: 4),
+      TextButton(
+        onPressed: busy ? null : onContinue,
+        child: const Text('ใช้งานต่อ'),
+      ),
+    ];
+  }
+
+  Widget _icon() => Center(
+        child: Container(
+          width: 76,
+          height: 76,
+          decoration: BoxDecoration(
+            color: _fatal ? Colors.red.shade50 : Colors.amber.shade50,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            _fatal ? Icons.gpp_bad_outlined : Icons.warning_amber_rounded,
+            size: 40,
+            color: _fatal ? Colors.red.shade700 : Colors.amber.shade800,
+          ),
+        ),
+      );
+
+  /// One finding per line, left aligned.
+  ///
+  /// Previously these were joined with separators into a single sentence, which
+  /// wrapped mid-word and left the reader counting dots to work out how many
+  /// problems there were.
+  Widget _findings() => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final signal in signals)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 6, right: 10),
+                      child: Container(
+                        width: 6,
+                        height: 6,
+                        decoration: BoxDecoration(
+                          // Marks which findings are the reason the app is
+                          // stopping, when the list mixes both kinds.
+                          color: fatalSignals.contains(signal)
+                              ? Colors.red.shade600
+                              : Colors.amber.shade800,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        _labels[signal] ?? signal,
+                        style: const TextStyle(fontSize: 14, height: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      );
+
+  Widget _guidance() => _fatal
+      ? const Column(
+          children: [
+            Text(
+              'กรุณาติดต่อเจ้าหน้าที่',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            SizedBox(height: 6),
+            Text(
+              'เพื่อตรวจสอบเครื่องก่อนเริ่มใช้งาน',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 14, height: 1.5),
+            ),
+          ],
+        )
+      // Numbered by hand rather than as a list widget: the steps have to break
+      // exactly where written, or Thai wraps mid-word.
+      : const Text(
+          '1.  เปิด การตั้งค่า ของเครื่อง\n'
+          '2.  เลือก ตัวเลือกนักพัฒนา\n'
+          '3.  ปิด USB Debugging และ Wireless Debugging\n'
+          '4.  กลับมาที่แอปแล้วกด ตรวจอีกครั้ง',
+          style: TextStyle(fontSize: 14, height: 1.9),
+        );
 }

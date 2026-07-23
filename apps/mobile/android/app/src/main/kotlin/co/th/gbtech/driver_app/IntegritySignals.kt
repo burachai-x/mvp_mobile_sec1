@@ -30,7 +30,7 @@ object IntegritySignals {
     fun collect(context: Context): Map<String, Boolean> = mapOf(
         "rooted" to isRooted(),
         "su_binary_found" to SU_PATHS.any { exists(it) },
-        "test_keys" to (Build.TAGS?.contains("test-keys") == true),
+        "test_keys" to notReleaseKeys(),
         "hook_framework_detected" to hasHookFramework(),
         "emulator" to isEmulator(),
         "debugger_attached" to isDebuggerAttached(),
@@ -84,10 +84,17 @@ object IntegritySignals {
     private fun isRooted(): Boolean =
         SU_PATHS.any { exists(it) } ||
             MAGISK_PATHS.any { exists(it) } ||
-            // A production image is signed with release-keys. test-keys means the
-            // build was signed with the public AOSP keys, which anyone holds.
-            Build.TAGS?.contains("test-keys") == true ||
+            notReleaseKeys() ||
             canRunSu()
+
+    /**
+     * A retail phone reports release-keys.
+     *
+     * Checked by what is absent rather than by listing what is wrong: looking
+     * for "test-keys" missed the emulator, which reports "dev-keys", and there
+     * is no reason to think that is the last variant.
+     */
+    private fun notReleaseKeys(): Boolean = Build.TAGS?.contains("release-keys") != true
 
     /**
      * Some paths are unreadable rather than absent, and the exception itself is

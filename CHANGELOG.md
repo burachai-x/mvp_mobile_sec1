@@ -42,8 +42,9 @@
 - middleware `AuthenticateDevice` — ตรวจ bearer token ซ้อนบนลายเซ็นอุปกรณ์
   และเช็คว่า session ยังไม่ถูกเพิกถอนทุกครั้ง
 - **ตรวจ USB Debugging / Wireless Debugging / Developer Options** อ่านจาก `Settings.Global`
-  และ **หน้าเตือนภาษาไทย** ก่อนหน้าล็อก บอกว่าเจออะไรพร้อมวิธีปิด เลือก *ตรวจอีกครั้ง*
-  หรือ *ใช้งานต่อ* ได้ — เตือน ไม่ปิดแอป (ปิดข้อขัดแย้ง PRD §2.2 กับ CLAUDE.md §6)
+  และ **หน้าเตือนภาษาไทย** ก่อนหน้าล็อก แยกเป็นสองระดับ (ปิดข้อขัดแย้ง PRD §2.2 กับ CLAUDE.md §6):
+  root / hook / emulator / ระบบไม่ได้ลงนามโดยผู้ผลิต → **ปิดแอปอย่างเดียว**,
+  debugging → เตือนพร้อมขั้นตอนปิด แล้ว *ตรวจอีกครั้ง* หรือ *ใช้งานต่อ* ได้
 - **Root / hook / emulator / debugger detection** ฝั่งแอป — ส่งขึ้น server ตอน enroll
   และแสดงบนหน้าจอ · server ใช้ขยับ risk score เท่านั้น ไม่ตัดสินใจแทน (§4.1)
 - **Kill switch ของ certificate pinning** — ปิด pinning จากระยะไกลได้ผ่าน manifest ที่ลงนามแล้วเท่านั้น

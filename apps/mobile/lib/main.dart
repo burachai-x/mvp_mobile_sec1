@@ -75,8 +75,12 @@ class _EnrollScreenState extends State<EnrollScreen> {
   Map<String, bool> _integrity = const {};
 
   /// Reset every launch on purpose. A warning acknowledged last week says
-  /// nothing about the phone the driver is holding now.
+  /// nothing about the phone the driver is holding now. Never lets a fatal
+  /// finding through — that path does not consult it.
   bool _integrityAcknowledged = false;
+
+  bool _recheckingIntegrity = false;
+
   final _log = <String>[];
 
   @override
@@ -253,8 +257,6 @@ class _EnrollScreenState extends State<EnrollScreen> {
     }
   }
 
-  bool _recheckingIntegrity = false;
-
   /// Sends the signals the app already collected, once the device is unlocked.
   ///
   /// Not awaited and never fatal: the warning shown to the driver has already
@@ -428,9 +430,13 @@ class _EnrollScreenState extends State<EnrollScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Ahead of the lock screen, so the driver reads it before typing a PIN into
-    // a phone that may be watched. It never blocks — see IntegrityWarning.
-    if (_step != _Step.loading && !_integrityAcknowledged && _flaggedSignals.isNotEmpty) {
+    // Ahead of everything, including the lock screen. A fatal finding is not
+    // dismissible at all; a warning can be acknowledged, and that
+    // acknowledgement lasts only for this run of the app.
+    final blocked = _flaggedSignals.isNotEmpty &&
+        (signalsAreFatal(_flaggedSignals) || !_integrityAcknowledged);
+
+    if (_step != _Step.loading && blocked) {
       return IntegrityWarning(
         signals: _flaggedSignals,
         busy: _recheckingIntegrity,
