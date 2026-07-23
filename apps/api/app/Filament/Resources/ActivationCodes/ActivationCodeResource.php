@@ -54,8 +54,13 @@ class ActivationCodeResource extends Resource
             DateTimePicker::make('expires_at')
                 ->required()
                 ->seconds(false)
-                ->minDate(now())
-                ->default(now()->addDays(7)),
+                // startOfMinute() is load-bearing. With seconds hidden the browser
+                // steps the field by 60s starting from `min`, so a `min` carrying
+                // seconds puts every whole-minute value off the grid — the field
+                // fails native validation and the Issue button silently does
+                // nothing, with no request sent and no error shown.
+                ->minDate(now()->startOfMinute())
+                ->default(now()->addDays(7)->startOfMinute()),
 
             TextInput::make('note')
                 ->maxLength(255),

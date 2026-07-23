@@ -33,6 +33,9 @@ class ListActivationCodes extends ListRecords
                     ->title('Activation code issued')
                     ->body('Show this QR to the driver now. It cannot be displayed again.')
                     ->persistent()
+                    // The view is on the safe list in AppServiceProvider, without
+                    // which Filament drops it on the way to the browser and the
+                    // notification arrives looking merely plain, with no QR.
                     ->view('filament.notifications.activation-qr', [
                         'token' => $this->issuedToken,
                     ])),
