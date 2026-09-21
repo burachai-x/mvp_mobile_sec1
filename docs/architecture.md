@@ -354,7 +354,7 @@ erDiagram
     staff ||--o{ activation_codes : "ออก / เพิกถอน"
     drivers ||--o{ driver_documents : "ใบสมัคร · สำเนาบัตร · สำเนาใบขับขี่"
     drivers ||--o{ activation_codes : "ออกให้คนขับคนนี้เท่านั้น"
-    drivers ||--o{ devices : "ใช้งานได้ทีละ 1 เครื่อง — เครื่องเก่าที่ revoke แล้วยังอยู่เป็นประวัติ"
+    drivers ||--o{ devices : "ใช้งานได้ทีละ 1 เครื่อง"
     activation_codes ||--o| devices : "ใช้ได้ครั้งเดียว"
     devices ||--o{ device_sessions : "rotating refresh token"
     devices ||--o{ integrity_reports : "รายงานทุกครั้งที่ปลดล็อก"
@@ -400,6 +400,9 @@ erDiagram
         jsonb meta "append-only — ห้าม update/delete"
     }
 ```
+
+เส้น `drivers ⟶ devices` เป็น 1:N เพราะเครื่องที่ `revoke` แล้วยังอยู่เป็นประวัติ —
+ที่บังคับว่าใช้งานได้ทีละเครื่องคือ partial unique index ไม่ใช่รูปร่างของตาราง
 
 `audit_logs` ไม่มีเส้นความสัมพันธ์ในรูปโดยตั้งใจ — มันอ้างถึงได้ทุกตารางผ่าน
 `subject_type` + `subject_id` และ **ต้องอยู่รอดนานกว่าข้อมูลที่มันอ้างถึง**
