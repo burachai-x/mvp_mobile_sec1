@@ -1,6 +1,6 @@
 // ตรวจ pin กับ TLS handshake จริง — เครื่องมือช่วย debug ไม่ใช่ส่วนหนึ่งของแอป
 //
-//   dart run tool/check_pin.dart 192.168.10.53 8443 <ca.crt> [pin,pin]
+//   dart run tool/check_pin.dart api.driver.test 443 <ca.crt> [pin,pin]
 //
 // ใช้โค้ดชุดเดียวกับที่แอปใช้ ต่างกันแค่ตรงนี้ต่อจริงแทนที่จะอ่าน DER จากไฟล์
 import 'dart:io';

@@ -13,7 +13,6 @@ cd "$(dirname "$0")/.."
 
 TLS_DIR=docker/nginx/dev-tls
 RAW_DIR=apps/mobile/android/app/src/debug/res/raw
-HOST_IP=${HOST_IP:-192.168.10.53}
 
 mkdir -p "$TLS_DIR" "$RAW_DIR"
 

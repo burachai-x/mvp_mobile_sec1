@@ -11,7 +11,7 @@ import 'update_manifest.dart';
 /// Supplied with `--dart-define` rather than a checked-in file so a developer's
 /// LAN address never becomes the default for a release build:
 ///
-///   flutter build apk --dart-define=API_BASE_URL=http://192.168.10.53:8080 \
+///   flutter build apk --dart-define=API_BASE_URL=https://api.driver.test \
 ///                     --dart-define=APP_SIGNATURE=`sha256 of the signing cert`
 class ApiConfig {
   const ApiConfig._();
