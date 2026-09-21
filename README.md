@@ -158,12 +158,63 @@ make up                  # เปิดทุก service
 make composer c=install  # ติดตั้ง dependency — vendor/ ไม่ได้ commit
 make garage-setup        # เตรียม object storage (layout + bucket + สิทธิ์)
 make migrate
+make seed                # บัญชีเจ้าหน้าที่ของ dev — ไม่มีทางอื่นที่จะสร้างคนแรก
 make verify-isolation    # ยืนยันว่า api ไม่มี KEK และต่อ Garage ไม่ได้
 ```
 
 ถ้าพอร์ต 443 หรือ 80 ไม่ว่างบนเครื่อง ให้แก้ `HTTPS_PORT` / `HTTP_PORT` ใน `.env` ก่อน `make up`
 
-ตรวจคุณภาพก่อนเปิด PR: `make lint` · `make analyse` · `make test` · `make secrets-scan`
+### เข้าหน้าเจ้าหน้าที่
+
+**1. ให้เครื่องรู้จักชื่อโฮสต์** — ครั้งเดียว ไม่ต้องแก้เวลาย้ายที่
+
+```bash
+make dev-hosts                    # พิมพ์บรรทัดที่ต้องเพิ่ม
+sudo sh -c 'echo "127.0.0.1 api.driver.test staff.driver.test dl.driver.test" >> /etc/hosts'
+```
+
+**2. ให้เบราว์เซอร์ยอมรับ cert ของ dev** — cert ออกโดย CA ที่สร้างเอง เบราว์เซอร์จึงเตือน เลือกทางใดทางหนึ่ง
+
+| วิธี | คำสั่ง / ขั้นตอน |
+|---|---|
+| ติดตั้ง CA (ครั้งเดียว) | `certutil -d sql:$HOME/.pki/nssdb -A -t "C,," -n "mvp dev CA" -i docker/nginx/dev-tls/dev-ca.crt` |
+| ข้ามชั่วคราว | บนหน้าเตือนของ Chrome พิมพ์ `thisisunsafe` (พิมพ์ทั้งคำ ไม่ต้องมีช่องกรอก) |
+
+**3. เปิด <https://staff.driver.test/staff> แล้วล็อกอิน**
+
+```
+admin@driver.test / dev-password      step-up PIN 123456
+```
+
+> 🔴 บัญชีนี้มาจาก `make seed` มีรหัสผ่านเขียนไว้ในเอกสาร **ใช้กับ dev เท่านั้น**
+> seeder ปฏิเสธที่จะรันถ้า `APP_ENV` ไม่ใช่ `local`
+
+step-up PIN ใช้ตอนกดดูเลขบัตรประชาชนเต็มหรือดาวน์โหลดเอกสาร — มีสิทธิ์อย่างเดียวไม่พอ
+ต้องใส่ PIN และกรอกเหตุผล ทุกครั้ง และทุกการเข้าถึงถูกบันทึกใน `audit_logs` แยกรายครั้ง (§6)
+
+### ลองยิง API ของแอปคนขับ
+
+ทุก request ต้องมี `X-App-Signature` ที่อยู่ใน allowlist — ถ้า `.env` ตั้งค่าไว้ การยิงเปล่าๆ จะได้ `403`
+
+```bash
+sig=$(grep '^APP_SIGNATURE_SHA256_ALLOWLIST=' .env | cut -d= -f2 | cut -d, -f1)
+curl -H "X-App-Signature: $sig" https://api.driver.test/api/v1/health
+```
+
+endpoint ที่เหลือทั้งหมดต้องมี `X-Device-Signature` ที่เซ็นด้วยกุญแจใน TEE ของเครื่องจริงด้วย
+จึงทดสอบจาก curl ล้วนไม่ได้ตามตั้งใจ — ดูลำดับการเรียกใน [`docs/api/openapi.yaml`](docs/api/openapi.yaml)
+
+### ตรวจคุณภาพ
+
+```bash
+make test            # เทสต์ฝั่ง API
+make lint            # code style
+make analyse         # static analysis
+make secrets-scan    # หา secret ที่หลุดเข้า git
+```
+
+ฝั่งแอป: `cd apps/mobile && flutter test`
+
 
 สามช่องทางแยกด้วย **ชื่อโฮสต์คงที่** บนพอร์ต 443 (แยกด้วย SNI) ส่วน `:80` redirect ไป https
 ชื่อไม่มี IP ในตัว → ย้ายที่เดโม่แล้วไม่ต้องแก้ cert / pin / build แอป

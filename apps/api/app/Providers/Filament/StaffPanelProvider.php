@@ -35,6 +35,9 @@ class StaffPanelProvider extends PanelProvider
             // /staff, not Filament's default /admin — matches the hostname split
             // and the API contract in docs/api/openapi.yaml
             ->path('staff')
+            // Without this Filament shows config('app.name'), which is still
+            // Laravel's default and tells a member of staff nothing.
+            ->brandName('Driver & Device Registry')
             ->login()
             // Staff are their own guard: a session on the default `web` guard
             // must never grant access to the portal.

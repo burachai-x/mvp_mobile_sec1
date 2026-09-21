@@ -115,6 +115,10 @@ artisan: ## รัน artisan (make artisan c="route:list")
 migrate: ## รัน migration
 	$(ARTISAN) migrate
 
+.PHONY: seed
+seed: ## สร้างบัญชีเจ้าหน้าที่ของ dev (local เท่านั้น)
+	$(ARTISAN) db:seed
+
 .PHONY: migrate-status
 migrate-status: ## ดูสถานะ migration
 	$(ARTISAN) migrate:status
