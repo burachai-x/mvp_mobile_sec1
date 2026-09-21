@@ -66,3 +66,4 @@ Thumbs.db
 
 # === index cache ของเครื่องมือค้นโค้ด (มี transcript ของ session ติดอยู่ด้วย) ===
 /graft/
+/.ignore
