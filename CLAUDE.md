@@ -279,8 +279,9 @@ docker compose exec php php artisan config:cache               # ❌ พัง�
 - production: ไม่ bind-mount source (โค้ดอบใน image), `read_only: true`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, non-root user, มี healthcheck และ resource limit ครบทุก service
 - บน Linux ให้ map host `UID`/`GID` เข้า image ผ่าน build arg ไม่งั้นไฟล์ใน bind mount จะกลายเป็นของ root แล้วแก้จาก host ไม่ได้
 - **ห้าม build Flutter ใน Docker** — Android SDK + NDK ทำให้ image โตเกิน 8 GB และ release signing ต้องใช้ `.jks` ซึ่งห้ามเข้า image layer
-  → build บนเครื่องที่ติดตั้ง Flutter SDK เอง และ **release build ทำบน "เครื่อง release เฉพาะ" เครื่องเดียวเท่านั้น**
-  (ดิสก์เข้ารหัส · `.jks` ไม่ออกจากเครื่อง · password เก็บแยก · ต้องมี backup ที่ทดสอบกู้แล้ว — ADR 0008)
+  → build บนเครื่องที่ติดตั้ง Flutter SDK เอง · debug build ทำที่ไหนก็ได้
+  **ยังไม่มี production keystore** — เมื่อถึงเวลาปล่อยจริง release build ต้องทำบน "เครื่อง release เฉพาะ"
+  เครื่องเดียว (ดิสก์เข้ารหัส · password เก็บแยก · backup ที่ทดสอบกู้แล้ว — ADR 0008)
 
 ---
 
