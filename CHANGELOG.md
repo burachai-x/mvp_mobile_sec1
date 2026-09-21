@@ -60,6 +60,11 @@
   ได้โดยยังเก็บแค่ hash ไว้เหมือนเดิม (§6.2)
 
 ### Security
+- **บันทึกว่าการเชื่อมต่อภายในไม่มี TLS และไม่มี mTLS เลย** (`architecture.md` §12.8 + threat model S19) —
+  `postgres` ใช้ scram-sha-256 แต่ไม่เข้ารหัส · **`valkey` ไม่มีรหัสผ่านเลย** ทั้งที่เก็บ nonce กัน replay
+  และ rate limit · `garage` ต่อผ่าน `http://` · สิ่งที่กันอยู่คือ network segmentation อย่างเดียว
+  พร้อมระบุเงื่อนไขที่ทำให้ข้อสรุปนี้ใช้ไม่ได้ (ย้าย service ออกไปคนละเครื่อง) และกับดักของ `sslmode=prefer`
+  ที่ถอยไป plaintext เงียบๆ โดยไม่มี error
 - **แผนเก็บ `.jks` เมื่อถึงเวลาปล่อยของจริง: "เครื่อง release เฉพาะ"** แทน CI secret ที่ไม่มีแล้ว (ADR 0008)
   — โปรเจกต์นี้ **ยังไม่มี production keystore** กุญแจที่มีเป็นของ dev ที่ `make init` สุ่มต่อเครื่อง
 - **🔴 สองข้อที่ต้องเตรียมก่อนสร้าง keystore ดอกแรก** (threat model S8) — keystore **หาย** เสียหายพอกับ
