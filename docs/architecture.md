@@ -147,33 +147,62 @@ PRD §2.2 เขียนว่าพบ root แล้วให้ปิดแ�
 
 ## 3. ภาพรวมสถาปัตยกรรม
 
+```mermaid
+flowchart TB
+    subgraph phone["โทรศัพท์คนขับ · Android"]
+        app["Flutter app<br/>สแกน QR · PIN 6 หลัก · ลายนิ้วมือ<br/>ตรวจ root/debugging · เช็คอัปเดตทุกครั้งที่เปิด"]
+        tee["TEE / StrongBox<br/>EC P-256 · export = false<br/>+ key attestation chain"]
+        app <--> tee
+    end
+
+    staff["เจ้าหน้าที่<br/>เบราว์เซอร์"]
+
+    subgraph host["Docker host"]
+        nginx["nginx :443 — แยกช่องทางด้วยชื่อโฮสต์ (SNI)<br/>:80 redirect ไป https ทั้งหมด"]
+
+        subgraph exposed["เปิดสู่อินเทอร์เน็ต"]
+            api["api — APP_ROLE=api<br/>/api/v1 · 7 endpoint<br/>ไม่มี DOCUMENT_KEK"]
+        end
+
+        subgraph inside["ฝั่งใน — จำกัด IP/VPN"]
+            portal["portal — APP_ROLE=portal<br/>/staff · Filament v5<br/>มี DOCUMENT_KEK"]
+            worker["worker<br/>เข้ารหัส/ถอดรหัสเอกสาร"]
+            scheduler["scheduler<br/>retention · manifest · แจ้งเตือน"]
+        end
+
+        pg[("PostgreSQL 18<br/>driver · device · code · audit")]
+        valkey[("Valkey 8<br/>nonce · rate limit · cache · queue")]
+        garage[("Garage — S3 API<br/>เอกสารที่เข้ารหัสแล้ว")]
+        dist[/"/srv/dist — static ล้วน<br/>manifest ที่ลงนามแล้ว + APK"/]
+    end
+
+    app -->|"HTTPS + certificate pinning<br/>X-Device-Signature ทุก request"| nginx
+    staff -->|HTTPS| nginx
+    nginx -->|api.driver.test| api
+    nginx -->|"staff.driver.test"| portal
+    nginx -->|"dl.driver.test — ไม่ผ่าน PHP<br/>ห้าม pin cert: เป็นช่องทางกู้คืน"| dist
+
+    api --> pg
+    api --> valkey
+    portal --> pg
+    portal --> valkey
+    portal --> garage
+    worker --> pg
+    worker --> garage
+    scheduler --> pg
+    scheduler --> garage
+    scheduler -->|"เผยแพร่ manifest ที่ลงนามมาแล้ว"| dist
+
+    api -. "คนละ network — ต่อไม่ได้<br/>โดยเจตนา (ADR 0007)" .-x garage
+
+    classDef exposedBox fill:#fde2e2,stroke:#c0392b,color:#000
+    classDef insideBox fill:#e8f4fd,stroke:#2471a3,color:#000
+    class api exposedBox
+    class portal,worker,scheduler insideBox
 ```
-┌─────────────────┐        ┌──────────────────────────────────────────────┐
-│  Flutter App    │        │                Docker host                   │
-│  (Android)      │        │                                              │
-│ ┌─────────────┐ │        │        ┌────────┐                            │
-│ │ Keystore    │ │ HTTPS  │        │ nginx  │                            │
-│ │ (EC P-256)  │◄┼────────┼───────►│  :443  │                            │
-│ │ + attestation│ │  pin   │        └─┬────┬─┘                           │
-│ └─────────────┘ │        │  api.*  ─┘    └─ staff.* (จำกัด IP/VPN)      │
-│                 │        │      │              │                        │
-│ - QR scanner    │        │  ┌───▼────┐    ┌────▼─────┐  ┌────────────┐ │
-│ - PIN (6 หลัก)  │        │  │  api   │    │  portal  │  │  worker    │ │
-│ - รับงานส่งของ    │        │  │ ไม่มี KEK│    │  มี KEK   │  │  scheduler │ │
-│ - เช็คอัปเดต      │        │  └───┬────┘    └──┬────┬──┘  └──┬───┬─────┘ │
-└─────────────────┘        │      │            │    │        │   │       │
-                           │  ┌───▼────────────▼┐ ┌─▼────────▼┐ │       │
-┌─────────────────┐        │  │ PostgreSQL 18   │ │ Valkey 8  │ │       │
-│  เจ้าหน้าที่       │────────┼─►│ driver/device/  │ │ nonce     │ │       │
-│   (browser)     │        │  │ code/audit      │ │ ratelimit │ │       │
-└─────────────────┘        │  └─────────────────┘ └───────────┘ │       │
-                           │                    ┌───────────────▼──┐    │
-                           │                    │ Garage (S3 API)  │◄───┘
-                           │                    │ เอกสารเข้ารหัสแล้ว │
-                           │                    └──────────────────┘
-                           │                    ▲ api ต่อไม่ได้ (คนละ network)
-                           └──────────────────────────────────────────────┘
-```
+
+**อ่านรูปนี้ยังไง:** กล่องแดงคือส่วนเดียวที่อินเทอร์เน็ตเข้าถึงได้ และเป็นส่วนที่ **ไม่ถือกุญแจ**
+ที่ถอดเอกสารได้ · เส้นประกากบาทคือข้อห้ามที่บังคับด้วย network ไม่ใช่ด้วยวินัยของคนเขียนโค้ด
 
 **API กับ Staff Portal แยกเป็นคนละ container** (ADR 0007) โดยใช้ **โค้ดเบสเดียวกัน** ต่างกันที่
 env, secret ที่ mount, network ที่ต่อได้ และ route ที่ลงทะเบียน (§12.2)
@@ -319,13 +348,62 @@ L2 + L2.5 ปิดได้: การโคลนอุปกรณ์, กา
 
 ทั้งหมดเป็นส่วนที่ **PRD ไม่ได้ระบุ** — ออกแบบเพิ่ม
 
+```mermaid
+erDiagram
+    staff ||--o{ drivers : "บันทึกหลังอนุมัติเอกสารกระดาษ"
+    staff ||--o{ activation_codes : "ออก / เพิกถอน"
+    drivers ||--o{ driver_documents : "ใบสมัคร · สำเนาบัตร · สำเนาใบขับขี่"
+    drivers ||--o{ activation_codes : "ออกให้คนขับคนนี้เท่านั้น"
+    drivers ||--o{ devices : "ใช้งานได้ทีละ 1 เครื่อง — เครื่องเก่าที่ revoke แล้วยังอยู่เป็นประวัติ"
+    activation_codes ||--o| devices : "ใช้ได้ครั้งเดียว"
+    devices ||--o{ device_sessions : "rotating refresh token"
+    devices ||--o{ integrity_reports : "รายงานทุกครั้งที่ปลดล็อก"
+
+    drivers {
+        uuid id PK
+        text national_id_encrypted "เข้ารหัส — ห้าม plaintext"
+        char national_id_hmac UK "ค้นหา/กันซ้ำโดยไม่ต้องถอดรหัส"
+        varchar employee_code UK
+        uuid created_by FK "หลักฐานว่าเจ้าหน้าที่คนไหนอนุมัติ"
+    }
+    driver_documents {
+        uuid id PK
+        text object_key "สุ่ม — ห้ามมีชื่อ/เลขบัตรในคีย์"
+        text dek_wrapped "DEK ต่อไฟล์ ห่อด้วย KEK"
+        text sha256 "ของ plaintext ก่อนเข้ารหัส"
+    }
+    devices {
+        uuid id PK
+        uuid driver_id FK
+        char device_uuid_hmac "HMAC เท่านั้น"
+        text public_key "SPKI DER — ตัวผูกอุปกรณ์ที่แท้จริง"
+        jsonb key_attestation
+        enum status "pending_pin - active - blocked - revoked"
+        text pin_hash "Argon2id"
+        timestamptz deleted_at "soft delete เท่านั้น"
+    }
+    device_sessions {
+        uuid id PK
+        text refresh_token_hash "เก็บ hash เท่านั้น"
+        timestamptz revoked_at
+    }
+    activation_codes {
+        uuid id PK
+        char token_hash "sha256 ของ JWT — ออกใหม่ทุกครั้งที่กด Show QR"
+        timestamptz expires_at "ดีฟอลต์ +15 นาที"
+        timestamptz used_at
+    }
+    audit_logs {
+        uuid id PK
+        enum actor_type "staff - driver - device - system"
+        text action
+        jsonb meta "append-only — ห้าม update/delete"
+    }
 ```
-staff ──บันทึกหลังอนุมัติเอกสาร──► drivers ──1:1──► devices
-  │                                 │                ▲
-  │                                 └──► driver_documents ──► Garage
-  │                                                           │
-  └──ออก──► activation_codes ──ผูกกับ driver, ใช้ครั้งเดียว────┘
-```
+
+`audit_logs` ไม่มีเส้นความสัมพันธ์ในรูปโดยตั้งใจ — มันอ้างถึงได้ทุกตารางผ่าน
+`subject_type` + `subject_id` และ **ต้องอยู่รอดนานกว่าข้อมูลที่มันอ้างถึง**
+(จึงเป็นเหตุผลที่การลบต้องเป็น crypto-shredding ไม่ใช่ `DELETE`)
 
 ### `drivers` — คนขับรถ (เจ้าหน้าที่เป็นคนบันทึกเท่านั้น)
 | คอลัมน์ | ชนิด | หมายเหตุ |
@@ -952,6 +1030,39 @@ GET https://api.example/app/v1/manifest.json
 > เจ้าของงานยกตัวอย่างเป็น `.../app-x/version.xd`
 > ผมเสนอเปลี่ยนเป็น path ที่มี version ของ **รูปแบบ manifest** เอง (`/app/v1/`)
 > เพื่อให้เปลี่ยนโครงสร้างไฟล์ในอนาคตได้โดยแอปเก่าไม่พัง — นามสกุลไม่มีผลต่อความปลอดภัย
+
+ลำดับการตรวจของแอป — **ทุกขั้นเป็นเงื่อนไขที่ขาดไม่ได้** ไม่ใช่ "ทำทีหลังได้"
+
+```mermaid
+flowchart TD
+    open(["เปิดแอป"]) --> fetch["GET /app/v1/manifest.json<br/>จาก dl host (ไม่ pin cert)"]
+    fetch --> sig{"1 · ลายเซ็น ECDSA P-256 ตรงกับ<br/>public key ที่ฝังมากับแอป?"}
+    sig -->|ไม่ตรง| drop["ทิ้งทั้งใบ<br/>ห้ามอ่านค่าข้างในแม้แต่ค่าเดียว"]
+    sig -->|ตรง| exp{"2 · ยังไม่ถึง expires_at?"}
+    exp -->|หมดอายุ| drop
+    exp -->|ยังไม่หมด| seq{"3 · sequence สูงกว่าที่เคยเห็น?"}
+    seq -->|"ต่ำกว่าหรือเท่า"| drop
+    seq -->|สูงกว่า| pkg{"4 · package ตรงกับของแอปเอง<br/>และ version_code สูงกว่าที่ติดตั้งอยู่?"}
+    pkg -->|"ไม่ตรง / ต่ำกว่า"| drop
+    pkg -->|ผ่าน| dl["ดาวน์โหลด APK"]
+    dl --> hash{"5 · apk_sha256 และขนาดตรง?"}
+    hash -->|ไม่ตรง| discard["ลบไฟล์ทิ้ง<br/>(เคยเจอจริง: โหลดครบ 170 MB แล้วปฏิเสธ)"]
+    hash -->|ตรง| cert{"6 · signing cert ของ APK ตรงทั้งกับที่<br/>manifest ระบุ และกับกุญแจของแอปที่รันอยู่?"}
+    cert -->|ไม่ตรง| discard
+    cert -->|ตรง| install(["ส่งให้ตัวติดตั้งของระบบ"])
+
+    drop --> keep["ใช้เวอร์ชันเดิมต่อ"]
+    discard --> keep
+
+    classDef bad fill:#fde2e2,stroke:#c0392b,color:#000
+    classDef good fill:#e6f4ea,stroke:#1e8449,color:#000
+    class drop,discard bad
+    class install good
+```
+
+**ข้อ 3 กับ 4 ต่างกัน:** `sequence` กันการเอา manifest **เก่าที่ลงนามถูกต้อง** กลับมาเล่นซ้ำ
+(replay) ส่วน `version_code` กันการ **ถอยเวอร์ชัน** ลงไปหารุ่นที่มีช่องโหว่ — ทั้งคู่เป็นลายเซ็นที่ถูกต้องทั้งคู่
+ต่างกันที่เจตนาของคนส่ง ตัดออกข้อใดข้อหนึ่งแล้วอีกข้อไม่ได้ช่วยอะไร
 
 #### รูปแบบไฟล์
 
