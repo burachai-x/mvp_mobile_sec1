@@ -221,7 +221,7 @@ cert ของ dev สร้างด้วย `./scripts/dev-tls.sh` (SAN เ�
 Laravel 13 · PHP 8.4 · PostgreSQL 18 · Valkey 8 · Garage (object storage) · Filament v5 · Flutter (Android)
 
 **Flutter ไม่ build ใน Docker** — release signing ต้องใช้ `.jks` ซึ่งห้ามเข้า image layer (ADR 0002)
-ติดตั้ง Flutter SDK บนเครื่องเอง และถือว่า **build จาก CI เท่านั้นที่เป็นของจริง**
+ติดตั้ง Flutter SDK บนเครื่องเอง · **release build ต้องทำบนเครื่องที่เก็บ `.jks` ไว้เท่านั้น**
 
 | service | หน้าที่ | `DOCUMENT_KEK` | ต่อ Garage |
 |---|---|---|---|

@@ -136,7 +136,7 @@ backend รันบน Docker ทั้งหมด
 ### Branch
 - default branch คือ `main` — **protected ห้าม commit ตรง** ทุกกรณี
 - ตั้งชื่อ `<type>/<slug>` เช่น `feat/driver-enroll`, `sec/replay-guard`, `fix/pin-lockout-race`
-- `type` ที่ใช้ได้: `feat` `fix` `sec` `perf` `refactor` `test` `docs` `chore` `ci`
+- `type` ที่ใช้ได้: `feat` `fix` `sec` `perf` `refactor` `test` `docs` `chore`
 
 ### Commit message — Conventional Commits
 ```
@@ -146,7 +146,7 @@ backend รันบน Docker ทั้งหมด
 
 <footer>
 ```
-- `scope` บังคับสำหรับ code: `api` `admin` `mobile` `docker` `db` `ci` (ยกเว้น `docs:` และ `chore:` ที่ไม่มี scope ได้)
+- `scope` บังคับสำหรับ code: `api` `admin` `mobile` `docker` `db` (ยกเว้น `docs:` และ `chore:` ที่ไม่มี scope ได้)
 - `subject` อังกฤษ, imperative mood (`add` ไม่ใช่ `added`), ≤ 72 ตัวอักษร, ไม่ลงท้ายด้วยจุด
 - breaking change → ใส่ `!` หลัง scope **และ** footer `BREAKING CHANGE: <คำอธิบาย>`
 
@@ -167,7 +167,8 @@ chore(deps): bump laravel/framework to 13.2.0
 - **ห้าม rewrite history บน `main` ทุกกรณี**
 
 ### Pull Request
-- ต้องผ่าน CI ครบ (lint + static analysis + test + secret scan) ก่อน merge
+- ก่อนเปิด PR ต้องรันให้ผ่านครบ: `make lint` · `make analyse` · `make test` · `make secrets-scan`
+  **ไม่มีอะไรตรวจให้อัตโนมัติ** — คนเปิด PR เป็นผู้รับผิดชอบ และต้องเขียนใน PR description ว่ารันแล้ว
 - merge แบบ **squash** เท่านั้น — subject ของ squash commit ต้องเป็น Conventional Commit
 - PR ที่แตะ auth / crypto / middleware / migration / **ข้อมูลส่วนบุคคลของคนขับ** ต้องมี reviewer อย่างน้อย 1 คนที่ไม่ใช่คนเขียน
 - PR ที่เปลี่ยน API ต้องอัปเดต `docs/api/openapi.yaml` ในคอมมิตเดียวกัน
@@ -189,7 +190,7 @@ chore(deps): bump laravel/framework to 13.2.0
 
 ### Backend version
 - SemVer `MAJOR.MINOR.PATCH`, git tag รูปแบบ `v1.2.3`
-- tag ได้เฉพาะบน `main` และเฉพาะคอมมิตที่ CI ผ่าน
+- tag ได้เฉพาะบน `main` และเฉพาะคอมมิตที่รัน `make test` + `make analyse` ผ่านแล้ว
 
 ### Flutter version
 - `pubspec.yaml` → `version: MAJOR.MINOR.PATCH+BUILD`
@@ -277,7 +278,8 @@ docker compose exec php php artisan config:cache               # ❌ พัง�
 - production: secret ต้องผ่าน **Docker secrets (mount เป็นไฟล์)** ไม่ใช่ environment variable — env อ่านได้จาก `docker inspect` และติดไปกับ crash dump
 - production: ไม่ bind-mount source (โค้ดอบใน image), `read_only: true`, `cap_drop: [ALL]`, `security_opt: [no-new-privileges:true]`, non-root user, มี healthcheck และ resource limit ครบทุก service
 - บน Linux ให้ map host `UID`/`GID` เข้า image ผ่าน build arg ไม่งั้นไฟล์ใน bind mount จะกลายเป็นของ root แล้วแก้จาก host ไม่ได้
-- **ห้าม build Flutter ใน Docker** — Android SDK + NDK ทำให้ image โตเกิน 8 GB และ release signing ต้องใช้ `.jks` ซึ่งห้ามเข้า image layer → build ใน CI เท่านั้น
+- **ห้าม build Flutter ใน Docker** — Android SDK + NDK ทำให้ image โตเกิน 8 GB และ release signing ต้องใช้ `.jks` ซึ่งห้ามเข้า image layer
+  → build บนเครื่องที่ติดตั้ง Flutter SDK เอง และ **release build ต้องทำบนเครื่องที่เก็บ `.jks` ไว้เท่านั้น**
 
 ---
 
@@ -374,7 +376,7 @@ header `Authorization`, `X-Device-Signature`, **เลขบัตรประ�
 
 - **manifest ต้องถูกลงนามเสมอ — HTTPS อย่างเดียวไม่พอ**
   HTTPS ไม่ป้องกันเซิร์ฟเวอร์ถูกเจาะ / CDN หลุด / CA ออกใบรับรองผิดพลาด
-- **release signing key ของ manifest ห้ามอยู่บนเซิร์ฟเวอร์** — ลงนามออฟไลน์หรือใน CI แล้วอัปโหลดเฉพาะไฟล์ที่ลงนามแล้ว
+- **release signing key ของ manifest ห้ามอยู่บนเซิร์ฟเวอร์** — ลงนามออฟไลน์ (`scripts/sign-manifest.sh`) แล้วอัปโหลดเฉพาะไฟล์ที่ลงนามแล้ว
 - **ห้ามเขียนโค้ดที่เชื่อ manifest ก่อนตรวจลายเซ็น** ไม่ว่าจะเป็นการ debug ชั่วคราวหรืออะไรก็ตาม
 - ทุกครั้งที่แตะโค้ดส่วนอัปเดต ต้องมีครบทั้ง 6 ข้อ: ตรวจลายเซ็น, `expires_at`, `sequence`, ห้าม downgrade, `apk_sha256`, signing cert
   **ขาดข้อใดข้อหนึ่ง = ช่องโหว่ ไม่ใช่ "ทำทีหลังได้"**
@@ -398,11 +400,11 @@ header `Authorization`, `X-Device-Signature`, **เลขบัตรประ�
 
 - ห้าม `docker compose down -v` / `docker volume rm` — ลบ volume คือข้อมูลหายถาวร
 - ห้าม `migrate:fresh` / `migrate:refresh` / `db:wipe` / `db:seed` บน environment ที่ไม่ใช่ local
-- ห้าม `php artisan migrate --force` นอก CI/CD pipeline
+- ห้าม `php artisan migrate --force` เอง — ให้เตรียมคำสั่งไว้ให้ผู้ใช้รัน
 - ห้ามยิง request ที่เปลี่ยนสถานะ (`POST` `PUT` `PATCH` `DELETE`) ไปยัง environment ที่ไม่ใช่ local โดยไม่ได้รับอนุญาตชัดเจนเป็นครั้งๆ ไป — ตอนสำรวจให้ใช้ `GET` / `HEAD` เท่านั้น
 - ห้ามสร้างหรือหมุน production key เอง (keystore, JWT signing key, pepper) — ให้เตรียมคำสั่งไว้ให้ผู้ใช้รันเอง
 - ห้ามแก้ `PRD.md` — เป็นเอกสารฝั่งลูกค้า ข้อสังเกต/ข้อโต้แย้งให้เขียนไว้ใน `docs/`
-- ห้ามปิด test, ใส่ `@skip`, ลด threshold ของ static analysis หรือแก้ config เพื่อให้ CI ผ่าน
+- ห้ามปิด test, ใส่ `@skip`, ลด threshold ของ static analysis หรือแก้ config เพื่อให้คำสั่งตรวจผ่าน
 - ห้ามใช้ข้อมูลส่วนบุคคลจริงของคนขับใน seeder, fixture หรือ test — ใช้ข้อมูลปลอมเท่านั้น
 - **ห้ามดาวน์โหลด เปิดดู หรือคัดลอกเอกสารคนขับจาก Garage** เว้นแต่ผู้ใช้สั่งชัดเจนเป็นครั้งๆ ไป — เป็นสำเนาบัตรประชาชนของบุคคลจริง
 - ห้ามสร้าง bucket หรือแก้ policy ของ Garage บน environment ที่ไม่ใช่ local
