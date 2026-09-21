@@ -1388,9 +1388,11 @@ docker compose exec php php artisan config:cache               # ❌
 → build บนเครื่องที่ติดตั้ง Flutter SDK เอง · release build ทำบนเครื่องที่ถือ `.jks` เท่านั้น
 Docker ครอบเฉพาะ backend + infra
 
-> ⚠️ **ยังไม่ตัดสินว่า `.jks` เก็บที่ไหน** — เดิมเอกสารชุดนี้วางไว้ที่ CI secret ซึ่งโปรเจกต์ยังไม่มี
-> ระหว่างที่ยังไม่ตัดสิน ข้อบังคับที่เหลืออยู่คือ **ห้ามเข้า repo และห้ามเข้า image layer**
-> ทางเลือกที่เหลือและเงื่อนไขของ `PRD.md` §2.1 อยู่ใน **ADR 0008** · ผลกระทบด้านความปลอดภัยอยู่ที่ threat model S8
+> **`.jks` อยู่บนเครื่อง release เฉพาะเครื่องเดียว** (ADR 0008) — ดิสก์เข้ารหัส, ไฟล์ไม่ออกจากเครื่อง,
+> password เก็บแยก, ระบุผู้ถือเป็นชื่อคน · ยังคงห้ามเข้า repo และห้ามเข้า image layer
+>
+> 🔴 **keystore หายเสียหายพอกับ keystore หลุด** — เครื่องเดียวพังแล้วเซ็น APK ใหม่ไม่ได้อีกเลย
+> ต้องมี backup ที่เข้ารหัส เก็บ 2 ที่ และ **ทดสอบกู้คืนจริงก่อน release แรก** (threat model S8)
 
 ---
 
@@ -1398,8 +1400,8 @@ Docker ครอบเฉพาะ backend + infra
 
 | ของ | เก็บที่ไหน | ข้อห้าม |
 |---|---|---|
-| `release.jks` | ⚠️ ยังไม่ตัดสิน (§12.7) | ห้ามเข้า repo และห้ามเข้า image layer |
-| keystore password | ⚠️ ยังไม่ตัดสิน (§12.7) | ห้ามอยู่ใน `build.gradle` |
+| `release.jks` | เครื่อง release เฉพาะ ดิสก์เข้ารหัส (ADR 0008) + backup เข้ารหัส 2 ที่ | ห้ามเข้า repo และห้ามเข้า image layer · **ห้ามอยู่เครื่องเดียวกับ `MANIFEST_SIGNING_KEY` ถ้าเลี่ยงได้** |
+| keystore password | password manager — **คนละที่กับไฟล์ `.jks`** | ห้ามอยู่ใน `build.gradle`, `key.properties` ที่ commit หรือ shell history |
 | `APP_SIGNATURE_SHA256_ALLOWLIST` | env (รับหลายค่า) | ต้องรองรับการหมุน key (§6.8) |
 | `DEVICE_UUID_PEPPER` | Docker secret | **ห้ามเปลี่ยนหลังขึ้น production** — hash เดิมพังทั้งหมด |
 | `ACTIVATION_JWT_PRIVATE_KEY` (ES256) | Docker secret | ห้ามใช้ HS256 |
