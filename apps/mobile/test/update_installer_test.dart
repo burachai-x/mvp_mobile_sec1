@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 /// it is something else entirely; these are what notice.
 void main() {
   UpdateManifest manifestFor(List<int> apk, {String? cert}) => UpdateManifest(
-        package: 'co.th.gbtech.driver_app',
+        package: 'com.example.driver_app',
         latestVersion: '1.1.0',
         latestVersionCode: 2,
         minSupportedVersionCode: 1,

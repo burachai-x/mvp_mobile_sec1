@@ -24,7 +24,7 @@ Future<void> main(List<String> args) async {
 
   final verifier = ManifestVerifier(
     publicKeys: keys,
-    packageName: 'co.th.gbtech.driver_app',
+    packageName: 'com.example.driver_app',
   );
 
   try {

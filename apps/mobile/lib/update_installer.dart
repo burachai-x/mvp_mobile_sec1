@@ -47,7 +47,7 @@ class UpdateInstaller {
   /// real build. Not pinning — see UpdateChecker.
   final SecurityContext? securityContext;
 
-  static const _channel = MethodChannel('co.th.gbtech.driver_app/keystore');
+  static const _channel = MethodChannel('com.example.driver_app/keystore');
 
   /// Reports bytes received against the total, for a progress bar.
   Future<void> download(

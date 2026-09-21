@@ -52,7 +52,7 @@ String lastAvailabilityReport = 'not checked';
 class AppLock {
   AppLock(this._prefs);
 
-  static const _channel = MethodChannel('co.th.gbtech.driver_app/keystore');
+  static const _channel = MethodChannel('com.example.driver_app/keystore');
   static const _sealedKey = 'biometric_refresh_token';
 
   final SharedPreferences _prefs;

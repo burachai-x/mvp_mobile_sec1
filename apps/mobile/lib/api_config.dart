@@ -91,7 +91,7 @@ class ApiConfig {
   /// can ever be delivered again.
   static const _manifestKeys = String.fromEnvironment('UPDATE_MANIFEST_KEYS');
 
-  static const packageName = 'co.th.gbtech.driver_app';
+  static const packageName = 'com.example.driver_app';
 
   /// Null when no update channel is configured, which is how the dev build runs.
   static ManifestVerifier? manifestVerifier() {

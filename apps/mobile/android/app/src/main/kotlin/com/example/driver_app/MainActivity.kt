@@ -1,4 +1,4 @@
-package co.th.gbtech.driver_app
+package com.example.driver_app
 
 import android.util.Base64
 import io.flutter.embedding.android.FlutterFragmentActivity
@@ -10,7 +10,7 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterFragmentActivity() {
 
     private companion object {
-        const val CHANNEL = "co.th.gbtech.driver_app/keystore"
+        const val CHANNEL = "com.example.driver_app/keystore"
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {

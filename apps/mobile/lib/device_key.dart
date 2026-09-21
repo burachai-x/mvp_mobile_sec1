@@ -7,7 +7,7 @@ import 'package:flutter/services.dart';
 /// Everything security-relevant happens on the native side; this class only
 /// moves values across. No private key material ever crosses the channel.
 class DeviceKey {
-  static const _channel = MethodChannel('co.th.gbtech.driver_app/keystore');
+  static const _channel = MethodChannel('com.example.driver_app/keystore');
 
   static Future<bool> exists() async =>
       await _channel.invokeMethod<bool>('hasKey') ?? false;

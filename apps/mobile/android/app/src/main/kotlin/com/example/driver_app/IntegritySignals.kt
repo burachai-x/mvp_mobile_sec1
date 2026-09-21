@@ -1,4 +1,4 @@
-package co.th.gbtech.driver_app
+package com.example.driver_app
 
 import android.content.Context
 import android.os.Build
