@@ -37,6 +37,7 @@ init: .env secrets ## เตรียมไฟล์ที่จำเป็น�
 		sed -i "s|^NATIONAL_ID_ENCRYPTION_KEY=.*|NATIONAL_ID_ENCRYPTION_KEY=$$(openssl rand -base64 32)|" .env; \
 		sed -i "s|^GARAGE_ACCESS_KEY=.*|GARAGE_ACCESS_KEY=GK$$(openssl rand -hex 12)|" .env; \
 		sed -i "s|^GARAGE_SECRET_KEY=.*|GARAGE_SECRET_KEY=$$(openssl rand -hex 32)|" .env; \
+		bash scripts/activation-keys.sh --write >/dev/null; \
 		echo "สร้าง .env แล้ว — ค่าเหล่านี้ใช้กับ dev เท่านั้น ห้ามใช้บน production"; \
 	fi
 
@@ -119,6 +120,10 @@ cache-clear: ## ล้าง cache ทั้งหมด (ทั้ง 2 role)
 .PHONY: key
 key: ## สร้าง APP_KEY ใหม่
 	$(ARTISAN) key:generate
+
+.PHONY: activation-keys
+activation-keys: ## สร้าง ES256 keypair ของ activation token (dev) — พิมพ์บรรทัดสำหรับ .env
+	@bash scripts/activation-keys.sh
 
 .PHONY: composer
 composer: ## รัน composer (make composer c="require x/y")
