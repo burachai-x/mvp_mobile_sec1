@@ -11,6 +11,10 @@ secrets/
 *.key
 *.pem
 !*.pub.pem
+# root CA ของ Google สำหรับตรวจ Android Key Attestation — เป็นค่าสาธารณะ
+# ไม่มี private key · ถ้าไม่ commit ผู้ที่ clone ไปจะตรวจ attestation chain ไม่ได้เลย
+# ซึ่งทำให้ชั้น L2.5 ที่ทั้งระบบพึ่งพาใช้งานไม่ได้ (architecture.md §4.2)
+!apps/api/resources/attestation/*.pem
 
 # === Dependencies ===
 /apps/api/vendor/

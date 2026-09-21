@@ -153,12 +153,15 @@ lockout จึงอยู่ที่ **server** (ผิด 5 ครั้ง�
 ## เริ่มต้น
 
 ```bash
-make init                # สร้าง .env + secret ของ dev (สุ่มให้อัตโนมัติ)
+make init                # .env + secret + cert ของ dev (สุ่มและสร้างให้อัตโนมัติ)
 make up                  # เปิดทุก service
 make composer c=install  # ติดตั้ง dependency — vendor/ ไม่ได้ commit
+make garage-setup        # เตรียม object storage (layout + bucket + สิทธิ์)
 make migrate
 make verify-isolation    # ยืนยันว่า api ไม่มี KEK และต่อ Garage ไม่ได้
 ```
+
+ถ้าพอร์ต 443 หรือ 80 ไม่ว่างบนเครื่อง ให้แก้ `HTTPS_PORT` / `HTTP_PORT` ใน `.env` ก่อน `make up`
 
 ตรวจคุณภาพก่อนเปิด PR: `make lint` · `make analyse` · `make test` · `make secrets-scan`
 

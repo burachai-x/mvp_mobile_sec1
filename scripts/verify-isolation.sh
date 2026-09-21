@@ -86,13 +86,16 @@ api_sig=$(printf '%s' "${APP_SIGNATURE_SHA256_ALLOWLIST:-}" | cut -d, -f1)
 
 # --resolve ชี้ทุกชื่อมาที่ 127.0.0.1 เอง — สคริปต์นี้ต้องรันได้โดยไม่พึ่ง
 # /etc/hosts ของเครื่อง (CI ไม่มี) และไม่พึ่ง dnsmasq (คนละเรื่องกับที่ตรวจ)
-resolve="--resolve api.${BASE}:443:127.0.0.1 --resolve staff.${BASE}:443:127.0.0.1"
+# พอร์ตมาจาก .env เพราะเครื่องที่ 443 ไม่ว่างต้องตั้ง HTTPS_PORT เป็นค่าอื่น
+# ถ้า hardcode 443 ไว้ curl จะต่อไม่ติดแล้วรายงานเป็น "การแยกพัง" ทั้งที่ปกติดี
+PORT=${HTTPS_PORT:-443}
+resolve="--resolve api.${BASE}:${PORT}:127.0.0.1 --resolve staff.${BASE}:${PORT}:127.0.0.1"
 ask() { curl -s -o /dev/null -w '%{http_code}' -m 10 $resolve --cacert "$CA" -H "X-App-Signature: ${api_sig}" "$1" || echo 000; }
 
-api_staff=$(ask "https://api.${BASE}/staff")
-api_health=$(ask "https://api.${BASE}/api/v1/health")
-portal_login=$(ask "https://staff.${BASE}/staff/login")
-portal_api=$(ask "https://staff.${BASE}/api/v1/health")
+api_staff=$(ask "https://api.${BASE}:${PORT}/staff")
+api_health=$(ask "https://api.${BASE}:${PORT}/api/v1/health")
+portal_login=$(ask "https://staff.${BASE}:${PORT}/staff/login")
+portal_api=$(ask "https://staff.${BASE}:${PORT}/api/v1/health")
 
 [ "$api_staff"    = "404" ] && pass "api /staff = 404"              || bad "api /staff = $api_staff (ต้อง 404)"
 [ "$api_health"   = "200" ] && pass "api /api/v1/health = 200"      || bad "api /api/v1/health = $api_health"

@@ -24,7 +24,17 @@ help: ## แสดงคำสั่งทั้งหมด
 .PHONY: init
 init: .env secrets ## เตรียมไฟล์ที่จำเป็นครั้งแรก (ปลอดภัยที่จะรันซ้ำ)
 	@mkdir -p .data/dist/app/v1 .data/secrets
-	@echo "พร้อมแล้ว → ต่อไป: make install (ถ้ายังไม่มี Laravel) หรือ make up"
+	# api กับ portal แคชแยกโฟลเดอร์กัน (compose.yaml ตั้ง APP_*_CACHE ไว้คนละที่)
+	# ถ้าไม่มี composer install จะล้มที่ package:discover
+	@mkdir -p apps/api/bootstrap/cache/api apps/api/bootstrap/cache/portal
+	@if [ -f docker/nginx/dev-tls/api.crt ]; then \
+		echo "cert ของ dev มีอยู่แล้ว — ข้าม (สร้างใหม่ด้วย ./scripts/dev-tls.sh)"; \
+	else \
+		echo "สร้าง cert ของ dev (nginx ขึ้นไม่ได้ถ้าไม่มี)..."; \
+		bash scripts/dev-tls.sh >/dev/null; \
+		echo "  หมายเหตุ: CA ใหม่ทับ dev_ca.crt ที่ commit ไว้ — จะขึ้นใน git diff"; \
+	fi
+	@echo "พร้อมแล้ว → ต่อไป: make up"
 
 .env: ## สร้าง .env จาก .env.example พร้อมสุ่ม secret ของ dev
 	@if [ -f .env ]; then echo ".env มีอยู่แล้ว — ข้าม"; else \
@@ -32,6 +42,13 @@ init: .env secrets ## เตรียมไฟล์ที่จำเป็น�
 		echo "สุ่ม secret สำหรับ dev..."; \
 		sed -i "s|^APP_KEY=.*|APP_KEY=base64:$$(openssl rand -base64 32)|" .env; \
 		sed -i "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$$(openssl rand -hex 16)|" .env; \
+		ip=$$(hostname -I 2>/dev/null | awk '{print $$1}'); \
+		if [ -n "$$ip" ]; then \
+			sed -i "s|^HOST_LAN_IP=.*|HOST_LAN_IP=$$ip  # ตรวจจาก make init — แก้เองเมื่อย้ายที่|" .env; \
+			echo "ตั้ง HOST_LAN_IP = $$ip (dnsmasq ผูกพอร์ต 53 กับ IP นี้)"; \
+		else \
+			echo "หา IP ของเครื่องไม่เจอ — แก้ HOST_LAN_IP ใน .env เองก่อน make up"; \
+		fi; \
 		sed -i "s|^DEVICE_UUID_PEPPER=.*|DEVICE_UUID_PEPPER=$$(openssl rand -hex 32)|" .env; \
 		sed -i "s|^DOCUMENT_KEK=.*|DOCUMENT_KEK=$$(openssl rand -base64 32)|" .env; \
 		sed -i "s|^NATIONAL_ID_ENCRYPTION_KEY=.*|NATIONAL_ID_ENCRYPTION_KEY=$$(openssl rand -base64 32)|" .env; \
@@ -124,6 +141,10 @@ key: ## สร้าง APP_KEY ใหม่
 .PHONY: activation-keys
 activation-keys: ## สร้าง ES256 keypair ของ activation token (dev) — พิมพ์บรรทัดสำหรับ .env
 	@bash scripts/activation-keys.sh
+
+.PHONY: garage-setup
+garage-setup: ## เตรียม Garage ของ dev — layout + bucket + สิทธิ์ (ปลอดภัยที่จะรันซ้ำ)
+	@bash scripts/garage-setup.sh
 
 .PHONY: composer
 composer: ## รัน composer (make composer c="require x/y")
