@@ -24,8 +24,8 @@ help: ## แสดงคำสั่งทั้งหมด
 .PHONY: init
 init: .env secrets ## เตรียมไฟล์ที่จำเป็นครั้งแรก (ปลอดภัยที่จะรันซ้ำ)
 	@mkdir -p .data/dist/app/v1 .data/secrets
-	# api กับ portal แคชแยกโฟลเดอร์กัน (compose.yaml ตั้ง APP_*_CACHE ไว้คนละที่)
-	# ถ้าไม่มี composer install จะล้มที่ package:discover
+# api กับ portal แคชแยกโฟลเดอร์กัน (compose.yaml ตั้ง APP_*_CACHE ไว้คนละที่)
+# ถ้าโฟลเดอร์ไม่มี composer install จะล้มที่ package:discover
 	@mkdir -p apps/api/bootstrap/cache/api apps/api/bootstrap/cache/portal
 	@if [ -f docker/nginx/dev-tls/api.crt ]; then \
 		echo "cert ของ dev มีอยู่แล้ว — ข้าม (สร้างใหม่ด้วย ./scripts/dev-tls.sh)"; \
