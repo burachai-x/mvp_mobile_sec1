@@ -245,6 +245,8 @@ services:
       # ทำให้ตอบเฉพาะ subnet เดียวกับ container มือถืออยู่คนละ subnet (LAN จริง)
       # จึงถูกปฏิเสธ "ignoring query from non-local network"
       - "--conf-file=/dev/null"
+      # log ทุก query เพื่อดูว่ามือถือถามมาถึงไหม (dev เท่านั้น)
+      - "--log-queries"
     ports:
       # ผูกเฉพาะ IP แล็ปท็อป ไม่ใช่ทุก interface — systemd-resolved (Ubuntu)
       # ยึด 53 บน 127.0.0.53 อยู่แล้ว ถ้าผูก 0.0.0.0 จะชน แต่ผูก IP LAN
