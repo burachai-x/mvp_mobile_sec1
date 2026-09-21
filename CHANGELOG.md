@@ -111,6 +111,7 @@
   เพราะ Eloquent bind เป็น string แล้ว PostgreSQL ปฏิเสธ AES output ที่ไม่ใช่ UTF-8
 
 ### Notes
-- ยังไม่มีโค้ดแอปพลิเคชัน — `make install` เพื่อติดตั้ง Laravel
+- `apps/api` มีโค้ดอยู่ใน repo แล้ว — clone มาแล้วรัน `make composer c=install` ไม่ใช่ `make install`
+  (`vendor/` ไม่ได้ commit ส่วน `make install` มีไว้ตอนยังไม่มี Laravel เท่านั้น)
 - **PostgreSQL 18+ เปลี่ยน layout ของ data directory** ต้อง mount volume ที่ `/var/lib/postgresql`
   ไม่ใช่ `/var/lib/postgresql/data` (docker-library/postgres#1259)

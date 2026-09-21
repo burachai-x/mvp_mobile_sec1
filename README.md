@@ -137,20 +137,21 @@ lockout จึงอยู่ที่ **server** (ผิด 5 ครั้ง�
 | แอป Android | สแกน QR, สร้าง key ใน TEE, เซ็น request, หน้าล็อก PIN, ปลดล็อกด้วยลายนิ้วมือ, certificate pinning, ตรวจ root/debugging, อัปเดตตัวเองผ่าน signed manifest |
 | เทสต์ | 21 ไฟล์ฝั่ง API (รวมเทสต์ยืนยันว่า `APP_ROLE=api` ไม่มี KEK และ `/staff` ตอบ 404) · 5 ไฟล์ฝั่งแอป |
 
-ยังไม่มี: CI pipeline (ยังไม่มี `.github/workflows/` — `make lint`, `make analyse`, `make test`,
-`make secrets-scan` รันมือได้แล้ว) · ระบบมอบหมายงานส่งของ (อยู่นอกขอบเขต MVP)
+ยังไม่มี: ระบบมอบหมายงานส่งของ — อยู่นอกขอบเขต MVP
 
 ---
 
 ## เริ่มต้น
 
 ```bash
-make init       # สร้าง .env + secret ของ dev (สุ่มให้อัตโนมัติ)
-make install    # ติดตั้ง Laravel ลง apps/api (ครั้งแรกครั้งเดียว)
-make up         # เปิดทุก service
+make init                # สร้าง .env + secret ของ dev (สุ่มให้อัตโนมัติ)
+make up                  # เปิดทุก service
+make composer c=install  # ติดตั้ง dependency — vendor/ ไม่ได้ commit
 make migrate
-make verify-isolation   # ยืนยันว่า api ไม่มี KEK และต่อ Garage ไม่ได้
+make verify-isolation    # ยืนยันว่า api ไม่มี KEK และต่อ Garage ไม่ได้
 ```
+
+ตรวจคุณภาพก่อนเปิด PR: `make lint` · `make analyse` · `make test` · `make secrets-scan`
 
 สามช่องทางแยกด้วย **ชื่อโฮสต์คงที่** บนพอร์ต 443 (แยกด้วย SNI) ส่วน `:80` redirect ไป https
 ชื่อไม่มี IP ในตัว → ย้ายที่เดโม่แล้วไม่ต้องแก้ cert / pin / build แอป
