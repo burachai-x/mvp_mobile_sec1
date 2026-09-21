@@ -6,7 +6,7 @@
 | สถานะ | ฉบับร่างเพื่อทบทวน (ยังไม่มีการ implement) |
 | วันที่ | 2026-07-22 |
 | Stack | Laravel 13 / PHP 8.4 / PostgreSQL 18 / Valkey 8 / Flutter |
-| Deployment | Docker (backend + infra) — Flutter build ผ่าน CI ไม่ผ่าน Docker |
+| Deployment | Docker (backend + infra) — Flutter build นอก Docker |
 
 ---
 
@@ -1121,7 +1121,7 @@ CA ออกใบรับรองผิดพลาดหรือถูก�
 
 ดังนั้น
 - `payload` ต้องลงนามด้วย **release signing key แยกต่างหาก (ES256 หรือ Ed25519)**
-  ที่ **ไม่ได้อยู่บนเซิร์ฟเวอร์** — ลงนามแบบออฟไลน์หรือใน CI แล้วอัปโหลดเฉพาะไฟล์ที่ลงนามแล้ว
+  ที่ **ไม่ได้อยู่บนเซิร์ฟเวอร์** — ลงนามแบบออฟไลน์ (`scripts/sign-manifest.sh`) แล้วอัปโหลดเฉพาะไฟล์ที่ลงนามแล้ว
 - **public key ฝังอยู่ในแอป** แอปตรวจลายเซ็นก่อนเชื่อ manifest ทุกครั้ง
 - ควรฝัง **public key สำรอง** ไว้ด้วยตั้งแต่เวอร์ชันแรก เผื่อต้องหมุนกุญแจ ไม่งั้นถ้ากุญแจหลักหลุดจะอัปเดตแอปไม่ได้เลย
 
@@ -1385,8 +1385,12 @@ docker compose exec php php artisan config:cache               # ❌
 ### 12.7 Flutter ไม่ build ใน Docker
 
 เหตุผล: Android SDK + NDK ทำให้ image โตเกิน 8 GB, build ช้า และ **release signing ต้องใช้ `.jks` ซึ่งห้ามเข้า image layer เด็ดขาด**
-→ build ผ่าน CI: decode keystore จาก secret ลง tmpfs → build → ลบทิ้งใน step เดียวกัน
+→ build บนเครื่องที่ติดตั้ง Flutter SDK เอง · release build ทำบนเครื่องที่ถือ `.jks` เท่านั้น
 Docker ครอบเฉพาะ backend + infra
+
+> ⚠️ **ยังไม่ตัดสินว่า `.jks` เก็บที่ไหน** — เดิมเอกสารชุดนี้วางไว้ที่ CI secret ซึ่งโปรเจกต์ยังไม่มี
+> ระหว่างที่ยังไม่ตัดสิน ข้อบังคับที่เหลืออยู่คือ **ห้ามเข้า repo และห้ามเข้า image layer**
+> ผลกระทบด้านความปลอดภัยอยู่ที่ `docs/security/threat-model.md` T6
 
 ---
 
@@ -1394,12 +1398,12 @@ Docker ครอบเฉพาะ backend + infra
 
 | ของ | เก็บที่ไหน | ข้อห้าม |
 |---|---|---|
-| `release.jks` | CI secret (base64) | ห้ามเข้า repo และห้ามเข้า image layer |
-| keystore password | CI secret | ห้ามอยู่ใน `build.gradle` |
+| `release.jks` | ⚠️ ยังไม่ตัดสิน (§12.7) | ห้ามเข้า repo และห้ามเข้า image layer |
+| keystore password | ⚠️ ยังไม่ตัดสิน (§12.7) | ห้ามอยู่ใน `build.gradle` |
 | `APP_SIGNATURE_SHA256_ALLOWLIST` | env (รับหลายค่า) | ต้องรองรับการหมุน key (§6.8) |
 | `DEVICE_UUID_PEPPER` | Docker secret | **ห้ามเปลี่ยนหลังขึ้น production** — hash เดิมพังทั้งหมด |
 | `ACTIVATION_JWT_PRIVATE_KEY` (ES256) | Docker secret | ห้ามใช้ HS256 |
-| **`MANIFEST_SIGNING_KEY`** (ES256/Ed25519) | **นอกเซิร์ฟเวอร์** — CI secret หรือออฟไลน์ | **ห้ามอยู่บนเซิร์ฟเวอร์เด็ดขาด** (§11.3) หลุด = เซ็น manifest ปลอมส่งมัลแวร์ลงทุกเครื่อง |
+| **`MANIFEST_SIGNING_KEY`** (ES256/Ed25519) | **นอกเซิร์ฟเวอร์** — เก็บออฟไลน์ | **ห้ามอยู่บนเซิร์ฟเวอร์เด็ดขาด** (§11.3) หลุด = เซ็น manifest ปลอมส่งมัลแวร์ลงทุกเครื่อง |
 | `NATIONAL_ID_ENCRYPTION_KEY` | Docker secret | **ห้ามหายและห้ามเปลี่ยนโดยไม่ re-encrypt** ไม่งั้นข้อมูลคนขับอ่านไม่ได้ทั้งฐาน |
 | **`DOCUMENT_KEK`** (+ `kek_version`) | Docker secret | **กุญแจที่สำคัญที่สุดในระบบ** — หายแล้วเอกสารทั้งหมดกู้ไม่ได้ตลอดกาล (§8.1)<br>**ห้ามเก็บไว้ที่เดียวกับ backup ของ PostgreSQL** |
 | `GARAGE_ACCESS_KEY` / `GARAGE_SECRET_KEY` | Docker secret | ต้องเป็น key ที่มีสิทธิ์เฉพาะ bucket ที่ใช้ **ห้ามใช้ admin key ของ Garage** |
@@ -1434,7 +1438,7 @@ Docker ครอบเฉพาะ backend + infra
 > การตั้ง `APP_ROLE` ผิดคือช่องโหว่ทันที และเป็นความผิดพลาดที่เกิดง่ายเวลา deploy
 
 `.gitignore` ต้องมี: `.env`, `*.jks`, `*.keystore`, `*.p8`, `*.p12`, private `*.pem`, `vendor/`, `storage/`
-เพิ่ม **gitleaks** ทั้งใน pre-commit hook และ CI
+เพิ่ม **gitleaks** ใน pre-commit hook (`.githooks/pre-commit`) และรันซ้ำด้วย `make secrets-scan` ก่อนเปิด PR
 
 ---
 
