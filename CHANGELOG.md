@@ -13,12 +13,13 @@
 - Threat model (`docs/security/threat-model.md`) — 17 สถานการณ์การโจมตี
 - ADR 7 ฉบับ:
   - 0001 — device keypair ใน hardware keystore เป็นตัวผูกอุปกรณ์
-  - 0002 — Docker ครอบเฉพาะ backend, Flutter build ใน CI
+  - 0002 — Docker ครอบเฉพาะ backend, Flutter build นอก Docker (ส่วน CI ถูกแทนที่โดย 0008)
   - 0003 — ไม่ทำ Play Integrity (ตัดถาวร) ใช้ Android Key Attestation แทน
   - 0004 — เก็บเอกสารใน Garage object storage
   - 0005 — envelope encryption + เลิกใช้ presigned URL
   - 0006 — sideload + signed update manifest
   - 0007 — แยก API กับ Staff Portal เป็นคนละ container
+  - 0008 — ไม่มี CI pipeline · คุณภาพและการ build ขึ้นกับคนและ `make`
 - `CLAUDE.md` — กฎ ภาษา / git / version / docker / security
 - โครง Docker: `compose.yaml`, `compose.prod.yaml`, `docker/php`, `docker/nginx`, `docker/garage`
 - `Makefile` — ห่อ `-u www-data` ไว้ทุก target ที่เขียนลง `storage/`
@@ -59,12 +60,19 @@
   ได้โดยยังเก็บแค่ hash ไว้เหมือนเดิม (§6.2)
 
 ### Security
+- **🔴 ยังไม่ตัดสินว่า `.jks` เก็บที่ไหน** — มาตรการเดิมของ threat model S8 วางอยู่บน "อยู่ใน CI secret เท่านั้น"
+  ซึ่งใช้ไม่ได้แล้ว · `PRD.md` §2.1 ยังบังคับให้เป็น Secure Environment (Vault หรือเทียบเท่า)
+  ต้องได้ข้อสรุปก่อนปล่อย release แรกที่เซ็นด้วย production key (ADR 0008)
 - แยก `api` / `portal` ที่ระดับ container, secret และ network (ADR 0007)
 - เอกสารเข้ารหัส AES-256-GCM แบบ envelope ก่อนขึ้น Garage (ADR 0005)
 - Masking ข้อมูลส่วนบุคคลเป็นค่าเริ่มต้น + step-up PIN 10 นาที + audit ทุกครั้ง
 - `.gitleaks.toml` พร้อม rule เฉพาะโปรเจกต์ (KEK, pepper, manifest key, เลขบัตร 13 หลัก)
 
 ### Changed
+- **ตัดกฎที่ผูกกับ CI ออกทั้งหมด** (ADR 0008) — repo ไม่มี CI จริง กฎที่ว่า PR ต้องผ่าน CI ก่อน merge
+  และ tag ได้เฉพาะคอมมิตที่ CI ผ่าน จึงไม่เคยถูกบังคับเลย · แทนด้วย `make lint` / `make analyse` /
+  `make test` / `make secrets-scan` ที่คนเปิด PR ต้องรันเองและระบุใน PR description
+  · ลงนาม manifest ออฟไลน์อย่างเดียว · release build ทำบนเครื่องที่ถือ `.jks`
 - **ย้ายมาใช้พอร์ตมาตรฐาน 443 และ 80 redirect** — แยก api / staff / dl ด้วย **ชื่อโฮสต์**
   บน 443 เดียว (เดิม 8080/8081/8082/8443) รูปแบบเดียวกับ prod
 - **ชื่อโดเมนคงที่ `*.driver.test` + dnsmasq ในสแตก** — เดิม dev ใช้ nip.io ที่มี IP ฝังในชื่อ
