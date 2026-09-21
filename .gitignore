@@ -63,3 +63,6 @@ Thumbs.db
 # สำเนา CA (ค่าสาธารณะ) ที่ debug build ต้องใช้ ถูก commit ไว้ที่
 # apps/mobile/android/app/src/debug/res/raw/dev_ca.crt
 /docker/nginx/dev-tls/
+
+# === index cache ของเครื่องมือค้นโค้ด (มี transcript ของ session ติดอยู่ด้วย) ===
+/graft/
