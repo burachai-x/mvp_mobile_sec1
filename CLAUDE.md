@@ -142,6 +142,13 @@ append-only — การลบต้องผ่าน job แยกที่�
   ห้ามให้แอปเอา `message` จาก API ไปแสดงตรงๆ (`message` มีไว้ให้ dev อ่าน ไม่ใช่ผู้ใช้)
 - ห้ามใส่ emoji ในโค้ด / commit / log (ใน `docs/` ใส่ได้เท่าที่จำเป็น)
 
+> **ข้อนี้แอปยังไม่ทำตาม และรู้ตัว** — `apps/mobile/lib/` ยัง hardcode ข้อความไทยไว้ 42 บรรทัด
+> (`integrity_warning.dart` 21 · `update_screen.dart` 11 · `main.dart` 8 · `lock_screen.dart` 2)
+> และ `test/integrity_warning_test.dart` อีก 13 บรรทัดที่ยึดกับข้อความพวกนั้น
+> ยอมรับไว้เพราะ repo นี้เป็นตัวอย่างเชิงแนวคิด ไม่ได้ปล่อยให้คนขับจริงใช้
+> ถ้าจะเอาไปใช้งานจริงต้องตั้ง `flutter_localizations` + ARB แล้วย้ายข้อความออกก่อน
+> พร้อมแก้เทสต์ให้ยึดกับ key ไม่ใช่ข้อความ
+
 ---
 
 ## 3. Git
