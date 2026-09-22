@@ -12,6 +12,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * Columns whose type static analysis cannot infer from casts() alone.
+ * national_id_encrypted is NOT NULL in the database, but the cast reads an
+ * empty column - what crypto-shredding leaves behind - back as null.
+ *
+ * @property string|null $national_id_encrypted
+ */
 class Driver extends Model
 {
     use HasUuids;

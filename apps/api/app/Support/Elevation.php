@@ -32,6 +32,9 @@ final class Elevation
      * @return array{elevation_id: string, expires_at: Carbon, scopes: list<string>}
      *
      * @throws RuntimeException on a wrong PIN, a locked account, or no permissions
+     *
+     * @phpstan-impure it opens an elevated session, so a current() call after
+     *                 this one can answer differently from the one before it
      */
     public function grant(Staff $staff, string $pin, string $reason): array
     {

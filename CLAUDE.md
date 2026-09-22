@@ -51,11 +51,9 @@ API 7 endpoint ตาม `openapi.yaml` (path ที่ 8 คือ `manifest.js
 append-only — การลบต้องผ่าน job แยกที่มีขั้นอนุมัติตาม `docs/architecture.md` §5 ซึ่งยังไม่มี
 คำสั่งพิมพ์บอกเหตุผลทุกครั้งที่รัน แทนที่จะปล่อยให้เป็นช่องตั้งค่าที่ดูเหมือนทำงาน
 
-**`make analyse` = larastan level 5** — `apps/api/phpstan.neon`
-โค้ดใหม่ถูกตรวจเต็มระดับ ส่วนของเดิม 41 รายการอยู่ใน `apps/api/phpstan-baseline.neon`
-ซึ่งเป็นหนี้ที่มองเห็นได้ **ไม่ใช่การลด threshold ตาม §8** — ส่วนใหญ่เกิดจาก `@property`
-ที่ขาดใน model ทำให้ phpstan มองคอลัมน์ที่ cast เป็น datetime ว่าเป็น string
-การไล่เก็บ baseline ให้หมดเป็นงานแยกต่างหาก
+**`make analyse` = larastan level 5 ผ่านสะอาด ไม่มี baseline** — `apps/api/phpstan.neon`
+ข้อยกเว้นเหลือ 6 ข้อ เขียนเหตุผลกำกับไว้ทีละข้อในไฟล์ config ไม่ใช่ไฟล์ baseline ก้อนทึบ
+ถ้าจะเพิ่มข้อยกเว้นใหม่ ต้องเขียนเหตุผลด้วยเสมอ — รายการที่ไม่มีใครอธิบายได้คือจุดที่การตรวจเลิกเป็นการตรวจ
 
 ---
 

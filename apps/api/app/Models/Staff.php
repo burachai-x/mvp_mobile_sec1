@@ -10,7 +10,13 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Carbon;
 
+/**
+ * Columns whose type static analysis cannot infer from casts() alone.
+ *
+ * @property Carbon|null $pin_locked_until
+ */
 class Staff extends Authenticatable implements FilamentUser, HasName
 {
     use HasUuids;

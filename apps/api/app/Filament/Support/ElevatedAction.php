@@ -75,17 +75,20 @@ final class ElevatedAction
     /**
      * Mirrors Elevation::scopesFor(), which is what actually decides the scopes.
      */
-    private static function isPermitted(string $scope): bool
+    protected static function isPermitted(string $scope): bool
     {
         $staff = self::staff();
 
         return match ($scope) {
             'view_pii' => (bool) $staff->can_view_pii,
             'download_documents' => (bool) $staff->can_download_documents,
+            // An unknown scope is refused rather than thrown: a new scope that
+            // nobody wired up here must not become an unhandled match error.
+            default => false,
         };
     }
 
-    private static function isElevated(string $scope): bool
+    protected static function isElevated(string $scope): bool
     {
         return (new Elevation)->current(self::staff(), $scope) !== null;
     }
@@ -94,14 +97,14 @@ final class ElevatedAction
      * Reports the failure on the PIN field rather than as a notification, so the
      * modal stays open with what was typed and the reason is not lost.
      */
-    private static function refuse(mixed $livewire, string $message): never
+    protected static function refuse(mixed $livewire, string $message): never
     {
         throw ValidationException::withMessages([
             'mountedActions.'.array_key_last($livewire->mountedActions).'.data.pin' => $message,
         ]);
     }
 
-    private static function staff(): Staff
+    protected static function staff(): Staff
     {
         /** @var Staff $staff */
         $staff = Filament::auth()->user();

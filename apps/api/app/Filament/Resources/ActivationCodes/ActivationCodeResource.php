@@ -128,7 +128,7 @@ class ActivationCodeResource extends Resource
      * The cost is that any QR shown earlier stops working, which the modal says
      * plainly.
      */
-    private static function showQrAction(): Action
+    protected static function showQrAction(): Action
     {
         return Action::make('showQr')
             ->label('Show QR')
@@ -147,7 +147,7 @@ class ActivationCodeResource extends Resource
             ));
     }
 
-    private static function mintToken(ActivationCode $record): string
+    protected static function mintToken(ActivationCode $record): string
     {
         return DB::transaction(function () use ($record): string {
             $issued = ActivationToken::make()->issue(
@@ -163,7 +163,7 @@ class ActivationCodeResource extends Resource
         });
     }
 
-    private static function revokeAction(): Action
+    protected static function revokeAction(): Action
     {
         return Action::make('revoke')
             ->icon(Heroicon::OutlinedNoSymbol)

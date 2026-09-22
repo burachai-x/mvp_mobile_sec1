@@ -10,7 +10,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
+/**
+ * Columns whose type static analysis cannot infer from casts() alone.
+ *
+ * @property Carbon|null $pin_locked_until
+ */
 class Device extends Model
 {
     use HasUuids, SoftDeletes;

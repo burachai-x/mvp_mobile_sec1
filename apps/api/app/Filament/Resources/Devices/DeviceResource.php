@@ -89,7 +89,7 @@ class DeviceResource extends Resource
      * driver loses a phone, but it is a revoke plus a soft delete. A real DELETE
      * would strand audit_logs entries and erase who held the device (§6.6).
      */
-    private static function deleteDeviceAction(): Action
+    protected static function deleteDeviceAction(): Action
     {
         return Action::make('deleteDevice')
             ->label('Delete device')
@@ -140,7 +140,7 @@ class DeviceResource extends Resource
      * one; restoring the old sessions would hand a live credential back to
      * whoever has the phone.
      */
-    private static function restoreDeviceAction(): Action
+    protected static function restoreDeviceAction(): Action
     {
         return Action::make('restoreDevice')
             ->label('Restore')
@@ -204,7 +204,7 @@ class DeviceResource extends Resource
      * sets a new one on the same phone (§6.7). Also unblocks a device that locked
      * itself out on failed PIN attempts.
      */
-    private static function resetPinAction(): Action
+    protected static function resetPinAction(): Action
     {
         return Action::make('resetPin')
             ->label('Reset PIN')

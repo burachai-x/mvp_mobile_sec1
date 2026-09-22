@@ -49,7 +49,7 @@ class StaffSeeder extends Seeder
         $staff->data_access_pin_hash = Hash::make(self::DATA_ACCESS_PIN);
         $staff->save();
 
-        $this->command?->info('staff: '.self::EMAIL.' / '.self::PASSWORD.'  (step-up PIN '.self::DATA_ACCESS_PIN.')');
-        $this->command?->warn('ใช้กับ dev เท่านั้น — เปลี่ยนก่อนเอาไปใช้ที่อื่นเสมอ');
+        $this->command->info('staff: '.self::EMAIL.' / '.self::PASSWORD.'  (step-up PIN '.self::DATA_ACCESS_PIN.')');
+        $this->command->warn('ใช้กับ dev เท่านั้น — เปลี่ยนก่อนเอาไปใช้ที่อื่นเสมอ');
     }
 }

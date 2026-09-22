@@ -7,7 +7,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
+/**
+ * Columns whose type static analysis cannot infer from casts() alone.
+ *
+ * @property Carbon $expires_at
+ */
 class ActivationCode extends Model
 {
     use HasUuids;

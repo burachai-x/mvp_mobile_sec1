@@ -106,7 +106,7 @@ class DriverResource extends Resource
                         ->state(fn (Driver $record): ?string => $record->national_id_encrypted),
                     TextEntry::make('full_phone')
                         ->label('Phone')
-                        ->state(fn (Driver $record): ?string => $record->phone),
+                        ->state(fn (Driver $record): string => $record->phone),
                     TextEntry::make('full_license_number')
                         ->label('License number')
                         ->state(fn (Driver $record): ?string => $record->license_number)
@@ -163,7 +163,7 @@ class DriverResource extends Resource
         ];
     }
 
-    private static function documentUpload(string $name, string $label): FileUpload
+    protected static function documentUpload(string $name, string $label): FileUpload
     {
         return FileUpload::make($name)
             ->label($label)

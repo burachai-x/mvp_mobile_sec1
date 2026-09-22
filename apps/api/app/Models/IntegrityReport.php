@@ -8,6 +8,11 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Columns whose type static analysis cannot infer from casts() alone.
+ *
+ * @property array<string, mixed> $verdict
+ */
 class IntegrityReport extends Model
 {
     use HasUuids;

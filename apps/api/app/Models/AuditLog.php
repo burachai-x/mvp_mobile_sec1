@@ -7,6 +7,11 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use RuntimeException;
 
+/**
+ * Columns whose type static analysis cannot infer from casts() alone.
+ *
+ * @property array<string, mixed> $meta
+ */
 class AuditLog extends Model
 {
     // Rows are written once and never touched again, so there is no updated_at.

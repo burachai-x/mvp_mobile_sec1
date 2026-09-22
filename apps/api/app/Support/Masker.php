@@ -39,7 +39,7 @@ final class Masker
     public static function tail(?string $value, int $keep = 4): ?string
     {
         if ($value === null || strlen($value) <= $keep) {
-            return $value === null ? null : str_repeat('x', strlen($value ?? ''));
+            return $value === null ? null : str_repeat('x', strlen($value));
         }
 
         return str_repeat('x', strlen($value) - $keep).substr($value, -$keep);

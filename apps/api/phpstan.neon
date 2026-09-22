@@ -1,9 +1,5 @@
 includes:
     - vendor/larastan/larastan/extension.neon
-    # Findings that predate static analysis being wired up at all. New code is
-    # checked at the full level; this file is the visible debt, not a lowered
-    # threshold. Shrinking it is its own job.
-    - phpstan-baseline.neon
 
 parameters:
     paths:
@@ -13,3 +9,44 @@ parameters:
         - tests
 
     level: 5
+
+    # Every exception is listed with the reason it is there. There is no
+    # baseline file: a silent list of "things we gave up on" is how a check
+    # stops being a check.
+    ignoreErrors:
+        # Filament types its query callbacks as Builder<Model>, so a scope or a
+        # SoftDeletes method declared on the concrete model is invisible here.
+        # Narrowing it means wrapping readable one-line closures in docblocks
+        # and buys no safety.
+        -
+            identifier: method.notFound
+            path: app/Filament/Resources/ActivationCodes/ActivationCodeResource.php
+        -
+            identifier: method.notFound
+            path: app/Filament/Resources/Devices/DeviceResource.php
+
+        # This test asserts that APP_ROLE=api carries no DOCUMENT_KEK in its
+        # environment. Reading config() instead would test the config cache,
+        # not the environment, which is the thing under test (ADR 0007).
+        -
+            identifier: larastan.noEnvCallsOutsideOfConfig
+            path: tests/Feature/Isolation/AppRoleIsolationTest.php
+
+        # Mockery adds shouldHaveReceived() to a faked facade at runtime.
+        -
+            identifier: staticMethod.notFound
+            path: tests/Feature/Portal/ElevationTest.php
+
+        # Laravel scaffolding that ships with a new project. Left in place
+        # rather than quietly deleted; it is harmless and not ours to remove.
+        -
+            identifier: method.alreadyNarrowedType
+            path: tests/Unit/ExampleTest.php
+
+        # Driver::$national_id does not exist on purpose - the model hides the
+        # name so assigning it cannot silently store a plaintext national ID.
+        # This test exists to prove the mistake stays cheap, so it has to touch
+        # the property that is not there.
+        -
+            identifier: property.notFound
+            path: tests/Unit/Models/NoSecretLeakTest.php

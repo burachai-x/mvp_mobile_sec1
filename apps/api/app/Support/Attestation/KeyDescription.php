@@ -70,7 +70,7 @@ final class KeyDescription
     {
         $decoded = ASN1::decodeBER($der);
 
-        if ($decoded === false || ! isset($decoded[0]['content'])) {
+        if (! isset($decoded[0]['content'])) {
             throw new RuntimeException('KeyDescription is not valid DER.');
         }
 
