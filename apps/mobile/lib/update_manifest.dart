@@ -48,6 +48,7 @@ class UpdateManifest {
     required this.sequence,
     required this.expiresAt,
     required this.certificatePinningEnabled,
+    this.releaseNotes = const {},
     this.releaseNotesTh,
   });
 
@@ -72,7 +73,20 @@ class UpdateManifest {
   /// is not.
   final bool certificatePinningEnabled;
 
+  /// Release notes keyed by language code, so the app can show the driver's
+  /// own language instead of one language chosen when the manifest was signed.
+  final Map<String, String> releaseNotes;
+
+  /// The single-language field this replaced. Still read, because manifests
+  /// signed before [releaseNotes] existed cannot be re-signed remotely - the
+  /// key is offline on purpose (section 7).
   final String? releaseNotesTh;
+
+  /// Notes to show for [languageCode], falling back to Thai and then to the
+  /// legacy field. Returns null when the manifest carries no notes at all,
+  /// which is allowed: notes are cosmetic and must never block an update.
+  String? releaseNotesFor(String languageCode) =>
+      releaseNotes[languageCode] ?? releaseNotes['th'] ?? releaseNotesTh;
 
   /// Whether [installedVersionCode] should be replaced by this release.
   bool isNewerThan(int installedVersionCode) => latestVersionCode > installedVersionCode;
@@ -122,6 +136,15 @@ class UpdateManifest {
       // Absent means on. A manifest that forgets the field must not switch
       // pinning off by omission.
       certificatePinningEnabled: json['certificate_pinning_enabled'] as bool? ?? true,
+      // Anything unexpected here degrades to no notes rather than throwing.
+      // A malformed cosmetic field must not take the update channel down.
+      releaseNotes: switch (json['release_notes']) {
+        final Map<String, dynamic> byLocale => {
+            for (final entry in byLocale.entries)
+              if (entry.value is String) entry.key: entry.value as String,
+          },
+        _ => const <String, String>{},
+      },
       releaseNotesTh: json['release_notes_th'] as String?,
     );
   }

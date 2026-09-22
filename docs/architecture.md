@@ -1098,7 +1098,10 @@ payload ที่ถอด base64 แล้ว:
     "apk_size": 28374619,
     "signing_cert_sha256": "3a7b…",
     "mandatory": true,
-    "release_notes_th": "แก้ปัญหาการสแกน QR บนเครื่องบางรุ่น",
+    "release_notes": {
+      "th": "แก้ปัญหาการสแกน QR บนเครื่องบางรุ่น",
+      "en": "Fixes QR scanning on some devices"
+    },
   "sequence": 47,
   "published_at": "2026-07-20T10:00:00Z",
   "expires_at": "2026-07-27T10:00:00Z",

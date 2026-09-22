@@ -680,7 +680,21 @@ components:
                 (Android บังคับตอนติดตั้งทับอยู่แล้ว แต่ตรวจเองจะได้ error ที่อธิบายได้
                 และกันการหลอกให้ผู้ใช้ถอนแอปเก่าก่อนติดตั้งของปลอม)
             mandatory: { type: boolean }
-            release_notes_th: { type: string }
+            release_notes:
+              type: object
+              additionalProperties: { type: string }
+              description: |
+                หมายเหตุรุ่น แยกตามรหัสภาษา เช่น `{"th": "…", "en": "…"}`
+                แอปเลือกตามภาษาที่กำลังแสดง ไม่มีภาษานั้นก็ถอยไป `th`
+                เป็นข้อมูลประกอบล้วน ไม่มีผลต่อการตัดสินใจอัปเดต
+              example: { th: "แก้ปัญหาการสแกน QR", en: "Fixes QR scanning" }
+            release_notes_th:
+              type: string
+              deprecated: true
+              description: |
+                รูปแบบภาษาเดียวของเดิม **ยังอ่านอยู่และห้ามลบ** — manifest ที่ลงนามไปแล้ว
+                เซ็นใหม่จากระยะไกลไม่ได้ เพราะกุญแจอยู่ออฟไลน์ตามเจตนา (§7)
+                manifest ใหม่ให้ใช้ `release_notes` แทน
             sequence:
               type: integer
               description: '**เพิ่มขึ้นทางเดียว** — แอปเก็บค่าล่าสุดที่เคยเห็นไว้ ปฏิเสธค่าที่เท่าหรือน้อยกว่า'

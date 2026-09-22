@@ -263,6 +263,53 @@ void main() {
     });
   });
 
+  group('release notes', () {
+    UpdateManifest manifest({
+      Map<String, String> byLocale = const {},
+      String? legacy,
+    }) =>
+        UpdateManifest(
+          package: _package,
+          latestVersion: '1.1.0',
+          latestVersionCode: 2,
+          minSupportedVersionCode: 1,
+          apkUrl: 'https://dl.driver.test/app/v1/driver-1.1.0.apk',
+          apkSha256: '0' * 64,
+          apkSize: 123,
+          signingCertSha256: '1' * 64,
+          mandatory: false,
+          sequence: 5,
+          expiresAt: DateTime.utc(2027),
+          certificatePinningEnabled: true,
+          releaseNotes: byLocale,
+          releaseNotesTh: legacy,
+        );
+
+    test('shows the language being asked for', () {
+      final m = manifest(byLocale: {'th': 'ไทย', 'en': 'English'});
+
+      expect(m.releaseNotesFor('en'), 'English');
+      expect(m.releaseNotesFor('th'), 'ไทย');
+    });
+
+    /// A driver whose phone is set to a language nobody translated should not
+    /// be shown an empty box where the notes are.
+    test('falls back to Thai for a language nobody translated', () {
+      expect(manifest(byLocale: {'th': 'ไทย'}).releaseNotesFor('ja'), 'ไทย');
+    });
+
+    /// The signing key is offline on purpose, so manifests published before
+    /// release_notes existed can never be re-signed with it.
+    test('still reads a manifest signed before release_notes existed', () {
+      expect(manifest(legacy: 'เก่า').releaseNotesFor('th'), 'เก่า');
+      expect(_verify(_document()).releaseNotesFor('th'), isNotNull);
+    });
+
+    test('no notes at all is not an error', () {
+      expect(manifest().releaseNotesFor('th'), isNull);
+    });
+  });
+
   test('a verifier with no keys is refused outright', () {
     expect(
       () => ManifestVerifier(publicKeys: const [], packageName: _package),

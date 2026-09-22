@@ -36,6 +36,12 @@ class _UpdateScreenState extends State<UpdateScreen> {
   String? _error;
   bool _needsPermission = false;
 
+  /// Release notes in the language the app is showing, if the manifest carries
+  /// any. Notes are the one part of a manifest that is only informative, so a
+  /// missing translation shows nothing rather than blocking the update.
+  String? _notes(BuildContext context) =>
+      widget.manifest.releaseNotesFor(Localizations.localeOf(context).languageCode);
+
   Future<void> _start() async {
     setState(() {
       _progress = 0;
@@ -127,7 +133,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                           ),
-                          if (widget.manifest.releaseNotesTh != null) ...[
+                          if (_notes(context) != null) ...[
                             const SizedBox(height: 22),
                             Container(
                               padding: const EdgeInsets.all(16),
@@ -136,7 +142,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                widget.manifest.releaseNotesTh!,
+                                _notes(context)!,
                                 style: const TextStyle(fontSize: 14, height: 1.6),
                               ),
                             ),
