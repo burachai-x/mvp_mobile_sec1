@@ -1,0 +1,15 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+    # Findings that predate static analysis being wired up at all. New code is
+    # checked at the full level; this file is the visible debt, not a lowered
+    # threshold. Shrinking it is its own job.
+    - phpstan-baseline.neon
+
+parameters:
+    paths:
+        - app
+        - database
+        - routes
+        - tests
+
+    level: 5
