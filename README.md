@@ -246,6 +246,7 @@ make test            # เทสต์ฝั่ง API
 make lint            # code style
 make analyse         # static analysis
 make secrets-scan    # หา secret ที่หลุดเข้า git
+make audit           # ช่องโหว่ที่ประกาศแล้วใน dependency
 ```
 
 ฝั่งแอป: `cd apps/mobile && flutter test`

@@ -182,7 +182,7 @@ chore(deps): bump laravel/framework to 13.2.0
 - **ห้าม rewrite history บน `main` ทุกกรณี**
 
 ### Pull Request
-- ก่อนเปิด PR ต้องรันให้ผ่านครบ: `make lint` · `make analyse` · `make test` · `make secrets-scan`
+- ก่อนเปิด PR ต้องรันให้ผ่านครบ: `make lint` · `make analyse` · `make test` · `make secrets-scan` · `make audit`
   **ไม่มีอะไรตรวจให้อัตโนมัติ** — คนเปิด PR เป็นผู้รับผิดชอบ และต้องเขียนใน PR description ว่ารันแล้ว
 - merge แบบ **squash** เท่านั้น — subject ของ squash commit ต้องเป็น Conventional Commit
 - PR ที่แตะ auth / crypto / middleware / migration / **ข้อมูลส่วนบุคคลของคนขับ** ต้องมี reviewer อย่างน้อย 1 คนที่ไม่ใช่คนเขียน

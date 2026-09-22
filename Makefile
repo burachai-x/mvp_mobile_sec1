@@ -171,6 +171,10 @@ lint-fix: ## แก้ code style
 analyse: ## static analysis
 	$(DC) exec -u www-data portal ./vendor/bin/phpstan analyse
 
+.PHONY: audit
+audit: ## ตรวจช่องโหว่ที่ประกาศแล้วใน dependency
+	$(DC) exec -u www-data portal composer audit
+
 .PHONY: openapi
 openapi: ## ตรวจว่า openapi.yaml ยัง parse ได้และ $$ref ครบ
 	@python3 -c "import yaml,json,re,sys; \
