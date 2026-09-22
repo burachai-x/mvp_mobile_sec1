@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'l10n/app_localizations.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -29,6 +31,12 @@ class DriverApp extends StatelessWidget {
     return MaterialApp(
       title: 'Driver',
       debugShowCheckedModeBanner: false,
+      // Thai first because that is who drives. English is kept complete so a
+      // phone set to any other language still reads, rather than falling back
+      // to keys (CLAUDE.md section 2).
+      locale: const Locale('th'),
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1B5E20)),
         useMaterial3: true,
@@ -415,29 +423,31 @@ class _EnrollScreenState extends State<EnrollScreen> {
 
   /// The server sends English developer text and expects the app to branch on
   /// the code, so nothing here shows `message` to a driver directly.
-  String _explain(ApiException e) => switch (e.code) {
-        'E_PIN_RESET_REQUIRED' => 'เจ้าหน้าที่รีเซ็ต PIN ให้แล้ว กรุณาตั้ง PIN ใหม่',
-        'E_PIN_ALREADY_SET' => 'เครื่องนี้ตั้ง PIN ไว้แล้ว',
-        // Never tells a driver to enroll again over a typo — that means a trip
-        // back to staff for a new activation code.
-        'E_PIN_INVALID' => switch (e.details['attempts_remaining']) {
-            final int left when left > 0 => 'PIN ไม่ถูกต้อง เหลืออีก $left ครั้ง',
-            _ => 'PIN ไม่ถูกต้อง',
-          },
-        'E_ACTIVATION_CODE_USED' =>
-          'This code has already been used or has expired. Ask staff for a new one.',
-        'E_DRIVER_HAS_ACTIVE_DEVICE' =>
-          'This driver already has a device. Staff must remove the old one first.',
-        'E_INTEGRITY_FAILED' => 'This device did not pass the security check.',
-        'E_DEVICE_SIGNATURE_INVALID' => 'เครื่องนี้ยืนยันตัวตนไม่ผ่าน ต้องลงทะเบียนใหม่',
-        'E_PIN_LOCKED' => switch (e.details['retry_after']) {
-            final int seconds when seconds > 0 =>
-              'ใส่ PIN ผิดหลายครั้ง ลองใหม่ในอีก ${(seconds / 60).ceil()} นาที',
-            _ => 'ใส่ PIN ผิดหลายครั้ง ติดต่อเจ้าหน้าที่',
-          },
-        'E_RATE_LIMITED' => 'Too many attempts. Wait a moment and try again.',
-        _ => '${e.code} — ${e.message}',
-      };
+  String _explain(ApiException e) {
+    final t = AppLocalizations.of(context)!;
+
+    return switch (e.code) {
+      'E_PIN_RESET_REQUIRED' => t.errPinResetRequired,
+      'E_PIN_ALREADY_SET' => t.errPinAlreadySet,
+      // Never tells a driver to enroll again over a typo — that means a trip
+      // back to staff for a new activation code.
+      'E_PIN_INVALID' => switch (e.details['attempts_remaining']) {
+          final int left when left > 0 => t.errPinInvalidAttemptsLeft(left),
+          _ => t.errPinInvalid,
+        },
+      'E_ACTIVATION_CODE_USED' => t.errActivationCodeUsed,
+      'E_DRIVER_HAS_ACTIVE_DEVICE' => t.errDriverHasActiveDevice,
+      'E_INTEGRITY_FAILED' => t.errIntegrityFailed,
+      'E_DEVICE_SIGNATURE_INVALID' => t.errDeviceSignatureInvalid,
+      'E_PIN_LOCKED' => switch (e.details['retry_after']) {
+          final int seconds when seconds > 0 =>
+            t.errPinLockedMinutes((seconds / 60).ceil()),
+          _ => t.errPinLocked,
+        },
+      'E_RATE_LIMITED' => t.errRateLimited,
+      _ => t.errUnknown(e.code, e.message),
+    };
+  }
 
   /// Seals the current refresh token behind the fingerprint sensor.
   ///
@@ -523,7 +533,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Driver enrollment'),
+        title: Text(AppLocalizations.of(context)!.enrollTitle),
         actions: [
           if (_step != _Step.loading)
             IconButton(
@@ -551,17 +561,17 @@ class _EnrollScreenState extends State<EnrollScreen> {
             padding: EdgeInsets.only(top: 120),
             child: CircularProgressIndicator(),
           )),
-        _Step.enrolling => const Column(
+        _Step.enrolling => Column(
             children: [
-              SizedBox(height: 100),
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Enrolling…'),
+              const SizedBox(height: 100),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              Text(AppLocalizations.of(context)!.enrolling),
             ],
           ),
         _Step.needsEnrollment => _intro(),
         _Step.needsPin => PinEntry(
-            title: 'ตั้งรหัส PIN 6 หลัก',
+            title: AppLocalizations.of(context)!.pinSetTitle,
             onSubmit: _setPin,
             error: _error,
           ),
@@ -575,16 +585,16 @@ class _EnrollScreenState extends State<EnrollScreen> {
           const SizedBox(height: 40),
           const Icon(Icons.qr_code_scanner, size: 96),
           const SizedBox(height: 24),
-          const Text(
-            'Scan the activation QR that staff issued for you.',
+          Text(
+            AppLocalizations.of(context)!.enrollScanPrompt,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 16),
+            style: const TextStyle(fontSize: 16),
           ),
           const SizedBox(height: 32),
           FilledButton.icon(
             onPressed: _scan,
             icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Scan QR'),
+            label: Text(AppLocalizations.of(context)!.enrollScanButton),
           ),
           if (_error != null) ...[
             const SizedBox(height: 24),
@@ -616,12 +626,12 @@ class _EnrollScreenState extends State<EnrollScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Device checks flagged: ${_flaggedSignals.join(', ')}',
+              AppLocalizations.of(context)!.integrityFlagged(_flaggedSignals.join(', ')),
               style: TextStyle(color: Colors.amber.shade900, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 4),
             Text(
-              'Reported to staff. Enrollment is not blocked by this.',
+              AppLocalizations.of(context)!.integrityReported,
               style: TextStyle(color: Colors.amber.shade900, fontSize: 12),
             ),
           ],
@@ -634,10 +644,10 @@ class _EnrollScreenState extends State<EnrollScreen> {
           const SizedBox(height: 40),
           Icon(Icons.verified_user, size: 96, color: Colors.green.shade700),
           const SizedBox(height: 24),
-          const Text(
-            'This device is enrolled.',
+          Text(
+            AppLocalizations.of(context)!.deviceEnrolled,
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
@@ -672,7 +682,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
           setState(() => _biometricUsable = false);
         },
         icon: const Icon(Icons.fingerprint),
-        label: const Text('Turn off fingerprint unlock'),
+        label: Text(AppLocalizations.of(context)!.biometricTurnOff),
       );
     }
 
@@ -684,7 +694,7 @@ class _EnrollScreenState extends State<EnrollScreen> {
       return FilledButton.icon(
         onPressed: _enableBiometric,
         icon: const Icon(Icons.fingerprint),
-        label: const Text('Use fingerprint next time'),
+        label: Text(AppLocalizations.of(context)!.biometricUseNext),
       );
     }
 
@@ -765,7 +775,7 @@ class _ScanScreenState extends State<ScanScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Scan activation QR')),
+      appBar: AppBar(title: Text(AppLocalizations.of(context)!.scanActivationQr)),
       body: Stack(
         alignment: Alignment.center,
         children: [
@@ -854,10 +864,10 @@ class _PinEntryState extends State<PinEntry> {
           onSubmitted: (_) => _submit(),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'Avoid 123456, 000000 or a repeated digit — the server rejects those.',
+        Text(
+          AppLocalizations.of(context)!.pinWeakHint,
           textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 12, color: Colors.black54),
+          style: const TextStyle(fontSize: 12, color: Colors.black54),
         ),
         const SizedBox(height: 24),
         FilledButton(
@@ -865,7 +875,7 @@ class _PinEntryState extends State<PinEntry> {
           child: _busy
               ? const SizedBox(
                   height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('Confirm'),
+              : Text(AppLocalizations.of(context)!.confirm),
         ),
         if (widget.error != null) ...[
           const SizedBox(height: 20),

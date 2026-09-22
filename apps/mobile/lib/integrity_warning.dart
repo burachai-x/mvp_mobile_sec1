@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'l10n/app_localizations.dart';
+
 /// Signals that mean the platform underneath the app cannot be trusted.
 ///
 /// A driver cannot undo any of these from a settings screen, so there is
@@ -51,18 +53,22 @@ class IntegrityWarning extends StatelessWidget {
 
   /// Short enough to sit on one line each. Thai does not break on spaces the
   /// way Flutter's line breaker expects, so a long sentence wraps in the middle
-  /// of a word — every string here is either short or broken by hand.
-  static const _labels = <String, String>{
-    'usb_debugging': 'เปิด USB Debugging อยู่',
-    'wireless_debugging': 'เปิด Wireless Debugging อยู่',
-    'developer_options': 'เปิดตัวเลือกนักพัฒนาอยู่',
-    'debugger_attached': 'มีตัวดีบักเชื่อมต่ออยู่',
-    'rooted': 'เครื่องถูกปลดล็อกสิทธิ์ (root)',
-    'su_binary_found': 'พบไฟล์ su บนเครื่อง',
-    'test_keys': 'ระบบไม่ได้ลงนามโดยผู้ผลิต',
-    'hook_framework_detected': 'พบเครื่องมือดักแก้การทำงานของแอป',
-    'emulator': 'กำลังทำงานบนโปรแกรมจำลอง',
-  };
+  /// of a word — every string behind these keys is short or broken by hand.
+  ///
+  /// An unknown signal falls through to its raw name rather than being hidden:
+  /// a flag the app has no wording for is still a flag the driver should see.
+  String _label(AppLocalizations t, String signal) => switch (signal) {
+        'usb_debugging' => t.signalUsbDebugging,
+        'wireless_debugging' => t.signalWirelessDebugging,
+        'developer_options' => t.signalDeveloperOptions,
+        'debugger_attached' => t.signalDebuggerAttached,
+        'rooted' => t.signalRooted,
+        'su_binary_found' => t.signalSuBinaryFound,
+        'test_keys' => t.signalTestKeys,
+        'hook_framework_detected' => t.signalHookFrameworkDetected,
+        'emulator' => t.signalEmulator,
+        _ => signal,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +97,9 @@ class IntegrityWarning extends StatelessWidget {
                           _icon(),
                           const SizedBox(height: 20),
                           Text(
-                            _fatal ? 'ไม่สามารถใช้งานต่อได้' : 'ตรวจพบความเสี่ยง',
+                            _fatal
+                                ? AppLocalizations.of(context)!.integrityFatalTitle
+                                : AppLocalizations.of(context)!.integrityWarnTitle,
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                                 fontSize: 22, fontWeight: FontWeight.w700, height: 1.3),
@@ -99,15 +107,15 @@ class IntegrityWarning extends StatelessWidget {
                           const SizedBox(height: 6),
                           Text(
                             _fatal
-                                ? 'เครื่องนี้ไม่ปลอดภัยพอสำหรับใช้งาน'
-                                : 'ควรปิดการตั้งค่าเหล่านี้ก่อนใช้งาน',
+                                ? AppLocalizations.of(context)!.integrityFatalBody
+                                : AppLocalizations.of(context)!.integrityWarnBody,
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                           ),
                           const SizedBox(height: 22),
-                          _findings(),
+                          _findings(context),
                           const SizedBox(height: 22),
-                          _guidance(),
+                          _guidance(context),
                         ],
                       ),
                     ),
@@ -115,7 +123,7 @@ class IntegrityWarning extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              ..._actions(),
+              ..._actions(context),
             ],
           ),
         ),
@@ -123,7 +131,7 @@ class IntegrityWarning extends StatelessWidget {
     );
   }
 
-  List<Widget> _actions() {
+  List<Widget> _actions(BuildContext context) {
     if (_fatal) {
       return [
         SizedBox(
@@ -131,7 +139,8 @@ class IntegrityWarning extends StatelessWidget {
           child: FilledButton(
             // The only way out. Reopening the app is what re-runs the checks.
             onPressed: () => SystemNavigator.pop(),
-            child: const Text('ปิดแอป', style: TextStyle(fontSize: 16)),
+            child: Text(AppLocalizations.of(context)!.integrityCloseApp,
+                style: const TextStyle(fontSize: 16)),
           ),
         ),
       ];
@@ -146,13 +155,14 @@ class IntegrityWarning extends StatelessWidget {
           onPressed: busy ? null : onRecheck,
           child: busy
               ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-              : const Text('ตรวจอีกครั้ง', style: TextStyle(fontSize: 16)),
+              : Text(AppLocalizations.of(context)!.integrityRecheck,
+                  style: const TextStyle(fontSize: 16)),
         ),
       ),
       const SizedBox(height: 4),
       TextButton(
         onPressed: busy ? null : onContinue,
-        child: const Text('ใช้งานต่อ'),
+        child: Text(AppLocalizations.of(context)!.integrityContinue),
       ),
     ];
   }
@@ -178,7 +188,7 @@ class IntegrityWarning extends StatelessWidget {
   /// Previously these were joined with separators into a single sentence, which
   /// wrapped mid-word and left the reader counting dots to work out how many
   /// problems there were.
-  Widget _findings() => Container(
+  Widget _findings(BuildContext context) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: Colors.grey.shade100,
@@ -211,7 +221,7 @@ class IntegrityWarning extends StatelessWidget {
                     ),
                     Expanded(
                       child: Text(
-                        _labels[signal] ?? signal,
+                        _label(AppLocalizations.of(context)!, signal),
                         style: const TextStyle(fontSize: 14, height: 1.4),
                       ),
                     ),
@@ -222,29 +232,26 @@ class IntegrityWarning extends StatelessWidget {
         ),
       );
 
-  Widget _guidance() => _fatal
-      ? const Column(
+  Widget _guidance(BuildContext context) => _fatal
+      ? Column(
           children: [
             Text(
-              'กรุณาติดต่อเจ้าหน้าที่',
+              AppLocalizations.of(context)!.integrityContactStaffTitle,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
             ),
-            SizedBox(height: 6),
+            const SizedBox(height: 6),
             Text(
-              'เพื่อตรวจสอบเครื่องก่อนเริ่มใช้งาน',
+              AppLocalizations.of(context)!.integrityContactStaffBody,
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, height: 1.5),
+              style: const TextStyle(fontSize: 14, height: 1.5),
             ),
           ],
         )
       // Numbered by hand rather than as a list widget: the steps have to break
       // exactly where written, or Thai wraps mid-word.
-      : const Text(
-          '1.  เปิด การตั้งค่า ของเครื่อง\n'
-          '2.  เลือก ตัวเลือกนักพัฒนา\n'
-          '3.  ปิด USB Debugging และ Wireless Debugging\n'
-          '4.  กลับมาที่แอปแล้วกด ตรวจอีกครั้ง',
-          style: TextStyle(fontSize: 14, height: 1.9),
+      : Text(
+          AppLocalizations.of(context)!.integritySteps,
+          style: const TextStyle(fontSize: 14, height: 1.9),
         );
 }

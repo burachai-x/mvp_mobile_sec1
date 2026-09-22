@@ -1,0 +1,88 @@
+{
+  "@@locale": "th",
+
+  "signalUsbDebugging": "เปิด USB Debugging อยู่",
+  "signalWirelessDebugging": "เปิด Wireless Debugging อยู่",
+  "signalDeveloperOptions": "เปิดตัวเลือกนักพัฒนาอยู่",
+  "signalDebuggerAttached": "มีตัวดีบักเชื่อมต่ออยู่",
+  "signalRooted": "เครื่องถูกปลดล็อกสิทธิ์ (root)",
+  "signalSuBinaryFound": "พบไฟล์ su บนเครื่อง",
+  "signalTestKeys": "ระบบไม่ได้ลงนามโดยผู้ผลิต",
+  "signalHookFrameworkDetected": "พบเครื่องมือดักแก้การทำงานของแอป",
+  "signalEmulator": "กำลังทำงานบนโปรแกรมจำลอง",
+
+  "integrityFatalTitle": "ไม่สามารถใช้งานต่อได้",
+  "integrityWarnTitle": "ตรวจพบความเสี่ยง",
+  "integrityFatalBody": "เครื่องนี้ไม่ปลอดภัยพอสำหรับใช้งาน",
+  "integrityWarnBody": "ควรปิดการตั้งค่าเหล่านี้ก่อนใช้งาน",
+  "integrityCloseApp": "ปิดแอป",
+  "integrityRecheck": "ตรวจอีกครั้ง",
+  "integrityContinue": "ใช้งานต่อ",
+  "integrityContactStaffTitle": "กรุณาติดต่อเจ้าหน้าที่",
+  "integrityContactStaffBody": "เพื่อตรวจสอบเครื่องก่อนเริ่มใช้งาน",
+  "integritySteps": "1.  เปิด การตั้งค่า ของเครื่อง\n2.  เลือก ตัวเลือกนักพัฒนา\n3.  ปิด USB Debugging และ Wireless Debugging\n4.  กลับมาที่แอปแล้วกด ตรวจอีกครั้ง",
+
+  "lockEnterPin": "ใส่รหัส PIN",
+  "lockForgotPin": "ลืมรหัส PIN ให้ติดต่อเจ้าหน้าที่",
+
+  "enrollTitle": "ลงทะเบียนคนขับ",
+  "enrolling": "กำลังลงทะเบียน…",
+  "enrollScanPrompt": "สแกน QR เปิดใช้งานที่เจ้าหน้าที่ออกให้",
+  "enrollScanButton": "สแกน QR",
+  "scanActivationQr": "สแกน QR เปิดใช้งาน",
+  "deviceEnrolled": "เครื่องนี้ลงทะเบียนแล้ว",
+  "integrityFlagged": "ผลตรวจสภาพเครื่องพบ: {signals}",
+  "@integrityFlagged": {
+    "placeholders": { "signals": { "type": "String" } }
+  },
+  "integrityReported": "รายงานให้เจ้าหน้าที่แล้ว ไม่ได้ปิดกั้นการลงทะเบียน",
+  "biometricTurnOff": "ปิดการปลดล็อกด้วยลายนิ้วมือ",
+  "biometricUseNext": "ครั้งต่อไปใช้ลายนิ้วมือ",
+  "pinSetTitle": "ตั้งรหัส PIN 6 หลัก",
+  "pinWeakHint": "เลี่ยง 123456, 000000 หรือเลขซ้ำกันทั้งหมด — เซิร์ฟเวอร์จะปฏิเสธ",
+  "confirm": "ยืนยัน",
+
+  "errPinResetRequired": "เจ้าหน้าที่รีเซ็ต PIN ให้แล้ว กรุณาตั้ง PIN ใหม่",
+  "errPinAlreadySet": "เครื่องนี้ตั้ง PIN ไว้แล้ว",
+  "errPinInvalidAttemptsLeft": "PIN ไม่ถูกต้อง เหลืออีก {count} ครั้ง",
+  "@errPinInvalidAttemptsLeft": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "errPinInvalid": "PIN ไม่ถูกต้อง",
+  "errActivationCodeUsed": "รหัสนี้ถูกใช้ไปแล้วหรือหมดอายุ กรุณาขอรหัสใหม่จากเจ้าหน้าที่",
+  "errDriverHasActiveDevice": "คนขับรายนี้มีเครื่องอยู่แล้ว เจ้าหน้าที่ต้องถอนเครื่องเดิมก่อน",
+  "errIntegrityFailed": "เครื่องนี้ไม่ผ่านการตรวจสอบความปลอดภัย",
+  "errDeviceSignatureInvalid": "เครื่องนี้ยืนยันตัวตนไม่ผ่าน ต้องลงทะเบียนใหม่",
+  "errPinLockedMinutes": "ใส่ PIN ผิดหลายครั้ง ลองใหม่ในอีก {minutes} นาที",
+  "@errPinLockedMinutes": {
+    "placeholders": { "minutes": { "type": "int" } }
+  },
+  "errPinLocked": "ใส่ PIN ผิดหลายครั้ง ติดต่อเจ้าหน้าที่",
+  "errRateLimited": "ลองมากเกินไป รอสักครู่แล้วลองใหม่",
+  "errUnknown": "{code} — {message}",
+  "@errUnknown": {
+    "placeholders": {
+      "code": { "type": "String" },
+      "message": { "type": "String" }
+    }
+  },
+
+  "updateFailedDownload": "ดาวน์โหลดไม่สำเร็จ ตรวจสอบสัญญาณแล้วลองใหม่",
+  "updateFailedHashMismatch": "ไฟล์อัปเดตไม่ตรงกับที่ระบบระบุไว้\nกรุณาแจ้งเจ้าหน้าที่",
+  "updateFailedSignatureMismatch": "ไฟล์อัปเดตไม่ได้ลงนามโดยผู้พัฒนาแอปนี้\nกรุณาแจ้งเจ้าหน้าที่",
+  "updateFailedPermissionRequired": "ต้องอนุญาตให้แอปนี้ติดตั้งแอปได้ก่อน",
+  "updateFailedHandoff": "เปิดตัวติดตั้งไม่สำเร็จ",
+  "updateAvailableTitle": "มีเวอร์ชันใหม่",
+  "updateVersion": "เวอร์ชัน {version}",
+  "@updateVersion": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "updateMandatory": "เวอร์ชันนี้จำเป็นต้องอัปเดตก่อนใช้งาน",
+  "updateDownloading": "กำลังดาวน์โหลด {percent}%",
+  "@updateDownloading": {
+    "placeholders": { "percent": { "type": "int" } }
+  },
+  "updateOpenSettings": "เปิดการตั้งค่า",
+  "updateNow": "อัปเดตตอนนี้",
+  "updateSkip": "ข้ามไปก่อน"
+}

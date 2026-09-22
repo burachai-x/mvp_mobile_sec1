@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
 import 'package:driver_app/api_client.dart';
+import 'package:driver_app/l10n/app_localizations.dart';
 import 'package:driver_app/main.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -64,17 +65,28 @@ void main() {
   });
 
   group('PinEntry', () {
+    // The button label is translated now, so the test asks the delegate for it
+    // instead of hardcoding one language's wording.
+    late AppLocalizations t;
+
+    setUpAll(() async {
+      t = await AppLocalizations.delegate.load(const Locale('th'));
+    });
+
     testWidgets('will not submit fewer than six digits', (tester) async {
       var submitted = 0;
 
       await tester.pumpWidget(MaterialApp(
+            locale: const Locale('th'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: PinEntry(title: 'Set a PIN', onSubmit: (_) async => submitted++),
         ),
       ));
 
       await tester.enterText(find.byType(TextField), '1234');
-      await tester.tap(find.text('Confirm'));
+      await tester.tap(find.text(t.confirm));
       await tester.pump();
 
       expect(submitted, 0);
@@ -84,13 +96,16 @@ void main() {
       final received = <String>[];
 
       await tester.pumpWidget(MaterialApp(
+            locale: const Locale('th'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: PinEntry(title: 'Set a PIN', onSubmit: (pin) async => received.add(pin)),
         ),
       ));
 
       await tester.enterText(find.byType(TextField), '481923');
-      await tester.tap(find.text('Confirm'));
+      await tester.tap(find.text(t.confirm));
       await tester.pumpAndSettle();
 
       expect(received, ['481923']);
@@ -98,6 +113,9 @@ void main() {
 
     testWidgets('rejects non-digits before they reach the server', (tester) async {
       await tester.pumpWidget(MaterialApp(
+            locale: const Locale('th'),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: PinEntry(title: 'Set a PIN', onSubmit: (_) async {}),
         ),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'l10n/app_localizations.dart';
+
 /// The screen a driver meets every time the app opens.
 ///
 /// A keypad rather than a text field: the PIN is six digits, and a numeric
@@ -110,7 +112,8 @@ class _LockScreenState extends State<LockScreen> {
             const Spacer(flex: 2),
             Icon(Icons.lock_outline, size: 56, color: Colors.grey.shade700),
             const SizedBox(height: 20),
-            const Text('ใส่รหัส PIN', style: TextStyle(fontSize: 18)),
+            Text(AppLocalizations.of(context)!.lockEnterPin,
+                style: const TextStyle(fontSize: 18)),
             const SizedBox(height: 24),
             _dots(),
             const SizedBox(height: 20),
@@ -130,9 +133,9 @@ class _LockScreenState extends State<LockScreen> {
                           ),
                         ),
             ),
-            const Text(
-              'ลืมรหัส PIN ให้ติดต่อเจ้าหน้าที่',
-              style: TextStyle(fontSize: 13, color: Colors.black54),
+            Text(
+              AppLocalizations.of(context)!.lockForgotPin,
+              style: const TextStyle(fontSize: 13, color: Colors.black54),
             ),
             if (!widget.biometricAvailable && widget.biometricNote != null) ...[
               const SizedBox(height: 8),

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'l10n/app_localizations.dart';
+
 import 'update_installer.dart';
 import 'update_manifest.dart';
 
@@ -57,21 +59,20 @@ class _UpdateScreenState extends State<UpdateScreen> {
     } on InstallRefused catch (e) {
       if (!mounted) return;
 
+      final t = AppLocalizations.of(context)!;
+
       setState(() {
         _progress = null;
         _needsPermission = e.reason == InstallFailure.permissionRequired;
         _error = switch (e.reason) {
-          InstallFailure.download => 'ดาวน์โหลดไม่สำเร็จ ตรวจสอบสัญญาณแล้วลองใหม่',
+          InstallFailure.download => t.updateFailedDownload,
           // Deliberately blunt. A file that does not match the manifest is
           // either a broken download or someone serving something else, and
           // the driver should not be nudged into retrying past it.
-          InstallFailure.hashMismatch =>
-            'ไฟล์อัปเดตไม่ตรงกับที่ระบบระบุไว้\nกรุณาแจ้งเจ้าหน้าที่',
-          InstallFailure.signatureMismatch =>
-            'ไฟล์อัปเดตไม่ได้ลงนามโดยผู้พัฒนาแอปนี้\nกรุณาแจ้งเจ้าหน้าที่',
-          InstallFailure.permissionRequired =>
-            'ต้องอนุญาตให้แอปนี้ติดตั้งแอปได้ก่อน',
-          InstallFailure.handoff => 'เปิดตัวติดตั้งไม่สำเร็จ',
+          InstallFailure.hashMismatch => t.updateFailedHashMismatch,
+          InstallFailure.signatureMismatch => t.updateFailedSignatureMismatch,
+          InstallFailure.permissionRequired => t.updateFailedPermissionRequired,
+          InstallFailure.handoff => t.updateFailedHandoff,
         };
       });
     }
@@ -114,14 +115,15 @@ class _UpdateScreenState extends State<UpdateScreen> {
                             ),
                           ),
                           const SizedBox(height: 20),
-                          const Text(
-                            'มีเวอร์ชันใหม่',
+                          Text(
+                            AppLocalizations.of(context)!.updateAvailableTitle,
                             textAlign: TextAlign.center,
-                            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
                           ),
                           const SizedBox(height: 6),
                           Text(
-                            'เวอร์ชัน ${widget.manifest.latestVersion}',
+                            AppLocalizations.of(context)!
+                                .updateVersion(widget.manifest.latestVersion),
                             textAlign: TextAlign.center,
                             style: TextStyle(fontSize: 14, color: Colors.grey.shade600),
                           ),
@@ -141,10 +143,10 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           ],
                           if (widget.mandatory) ...[
                             const SizedBox(height: 20),
-                            const Text(
-                              'เวอร์ชันนี้จำเป็นต้องอัปเดตก่อนใช้งาน',
+                            Text(
+                              AppLocalizations.of(context)!.updateMandatory,
                               textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                             ),
                           ],
                           if (busy) ...[
@@ -152,7 +154,8 @@ class _UpdateScreenState extends State<UpdateScreen> {
                             LinearProgressIndicator(value: _progress),
                             const SizedBox(height: 8),
                             Text(
-                              'กำลังดาวน์โหลด ${((_progress ?? 0) * 100).round()}%',
+                              AppLocalizations.of(context)!
+                                  .updateDownloading(((_progress ?? 0) * 100).round()),
                               textAlign: TextAlign.center,
                               style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                             ),
@@ -181,7 +184,9 @@ class _UpdateScreenState extends State<UpdateScreen> {
                           ? widget.installer.openPermissionSettings
                           : _start,
                   child: Text(
-                    _needsPermission ? 'เปิดการตั้งค่า' : 'อัปเดตตอนนี้',
+                    _needsPermission
+                        ? AppLocalizations.of(context)!.updateOpenSettings
+                        : AppLocalizations.of(context)!.updateNow,
                     style: const TextStyle(fontSize: 16),
                   ),
                 ),
@@ -190,7 +195,7 @@ class _UpdateScreenState extends State<UpdateScreen> {
                 const SizedBox(height: 4),
                 TextButton(
                   onPressed: busy ? null : widget.onSkip,
-                  child: const Text('ข้ามไปก่อน'),
+                  child: Text(AppLocalizations.of(context)!.updateSkip),
                 ),
               ],
             ],

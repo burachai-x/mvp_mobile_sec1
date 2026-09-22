@@ -1,0 +1,95 @@
+{
+  "@@locale": "en",
+
+  "signalUsbDebugging": "USB debugging is on",
+  "signalWirelessDebugging": "Wireless debugging is on",
+  "signalDeveloperOptions": "Developer options are on",
+  "signalDebuggerAttached": "A debugger is attached",
+  "signalRooted": "This device is rooted",
+  "signalSuBinaryFound": "An su binary was found on this device",
+  "signalTestKeys": "The system was not signed by the manufacturer",
+  "signalHookFrameworkDetected": "A framework that rewrites app behaviour was found",
+  "signalEmulator": "Running on an emulator",
+
+  "integrityFatalTitle": "Cannot continue",
+  "integrityWarnTitle": "Risk detected",
+  "integrityFatalBody": "This device is not safe enough to use",
+  "integrityWarnBody": "Turn these settings off before using the app",
+  "integrityCloseApp": "Close the app",
+  "integrityRecheck": "Check again",
+  "integrityContinue": "Continue anyway",
+  "integrityContactStaffTitle": "Please contact staff",
+  "integrityContactStaffBody": "so the device can be checked before you start",
+  "integritySteps": "1.  Open Settings on the device\n2.  Choose Developer options\n3.  Turn off USB debugging and wireless debugging\n4.  Come back and tap Check again",
+  "@integritySteps": {
+    "description": "Numbered by hand, not built from a list widget: the lines have to break exactly where written or Thai wraps mid-word."
+  },
+
+  "lockEnterPin": "Enter your PIN",
+  "lockForgotPin": "If you have forgotten your PIN, contact staff",
+
+  "enrollTitle": "Driver enrollment",
+  "enrolling": "Enrolling…",
+  "enrollScanPrompt": "Scan the activation QR that staff issued for you.",
+  "enrollScanButton": "Scan QR",
+  "scanActivationQr": "Scan activation QR",
+  "deviceEnrolled": "This device is enrolled.",
+  "integrityFlagged": "Device checks flagged: {signals}",
+  "@integrityFlagged": {
+    "placeholders": { "signals": { "type": "String" } }
+  },
+  "integrityReported": "Reported to staff. Enrollment is not blocked by this.",
+  "biometricTurnOff": "Turn off fingerprint unlock",
+  "biometricUseNext": "Use fingerprint next time",
+  "pinSetTitle": "Set a 6-digit PIN",
+  "pinWeakHint": "Avoid 123456, 000000 or a repeated digit — the server rejects those.",
+  "confirm": "Confirm",
+
+  "errPinResetRequired": "Staff have reset your PIN. Please set a new one.",
+  "errPinAlreadySet": "This device already has a PIN.",
+  "errPinInvalidAttemptsLeft": "Wrong PIN. {count} attempts left.",
+  "@errPinInvalidAttemptsLeft": {
+    "placeholders": { "count": { "type": "int" } }
+  },
+  "errPinInvalid": "Wrong PIN.",
+  "errActivationCodeUsed": "This code has already been used or has expired. Ask staff for a new one.",
+  "errDriverHasActiveDevice": "This driver already has a device. Staff must remove the old one first.",
+  "errIntegrityFailed": "This device did not pass the security check.",
+  "errDeviceSignatureInvalid": "This device could not prove who it is. It has to be enrolled again.",
+  "errPinLockedMinutes": "Too many wrong PINs. Try again in {minutes} minutes.",
+  "@errPinLockedMinutes": {
+    "placeholders": { "minutes": { "type": "int" } }
+  },
+  "errPinLocked": "Too many wrong PINs. Contact staff.",
+  "errRateLimited": "Too many attempts. Wait a moment and try again.",
+  "errUnknown": "{code} — {message}",
+  "@errUnknown": {
+    "description": "Fallback for a code the app does not know. Shows the developer text on purpose: an unmapped code is a bug, and hiding it leaves nothing to report.",
+    "placeholders": {
+      "code": { "type": "String" },
+      "message": { "type": "String" }
+    }
+  },
+
+  "updateFailedDownload": "Download failed. Check your connection and try again.",
+  "updateFailedHashMismatch": "The update file does not match what the system published.\nPlease tell staff.",
+  "@updateFailedHashMismatch": {
+    "description": "Deliberately blunt. A file that does not match the manifest is either a broken download or someone serving something else, and the driver must not be nudged into retrying past it."
+  },
+  "updateFailedSignatureMismatch": "The update file was not signed by this app's developer.\nPlease tell staff.",
+  "updateFailedPermissionRequired": "This app needs permission to install apps first.",
+  "updateFailedHandoff": "Could not open the installer.",
+  "updateAvailableTitle": "A new version is available",
+  "updateVersion": "Version {version}",
+  "@updateVersion": {
+    "placeholders": { "version": { "type": "String" } }
+  },
+  "updateMandatory": "This version must be installed before you can continue.",
+  "updateDownloading": "Downloading {percent}%",
+  "@updateDownloading": {
+    "placeholders": { "percent": { "type": "int" } }
+  },
+  "updateOpenSettings": "Open settings",
+  "updateNow": "Update now",
+  "updateSkip": "Skip for now"
+}
