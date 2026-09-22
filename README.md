@@ -308,7 +308,7 @@ cert ของ dev สร้างด้วย `./scripts/dev-tls.sh` (SAN เ�
 | [`CLAUDE.md`](CLAUDE.md) | กฎการทำงาน: ภาษา / git / version / docker / security |
 | [`docs/architecture.md`](docs/architecture.md) | เอกสารออกแบบฉบับเต็ม 15 หัวข้อ + diagram |
 | [`docs/api/openapi.yaml`](docs/api/openapi.yaml) | **source of truth** ของ API contract |
-| [`docs/security/threat-model.md`](docs/security/threat-model.md) | 17 สถานการณ์การโจมตี + มาตรการ + ความเสี่ยงที่เหลือ |
+| [`docs/security/threat-model.md`](docs/security/threat-model.md) | 18 สถานการณ์การโจมตี + มาตรการ + ความเสี่ยงที่เหลือ |
 | [`docs/adr/`](docs/adr/) | บันทึกการตัดสินใจเชิงสถาปัตยกรรม 8 ฉบับ |
 | [`docs/runbook/`](docs/runbook/) | ขั้นตอนปฏิบัติ — certificate pinning, nginx ของ prod |
 | [`CHANGELOG.md`](CHANGELOG.md) | Keep a Changelog |

@@ -10,8 +10,8 @@
 ### Added
 - เอกสารออกแบบฉบับเต็ม (`docs/architecture.md`) — 15 หัวข้อ
 - API contract (`docs/api/openapi.yaml`) — OpenAPI 3.1, 8 paths (เฉพาะ API ของแอปคนขับ)
-- Threat model (`docs/security/threat-model.md`) — 17 สถานการณ์การโจมตี
-- ADR 7 ฉบับ:
+- Threat model (`docs/security/threat-model.md`) — 18 สถานการณ์การโจมตี (S1–S19 ไม่มี S15)
+- ADR 8 ฉบับ:
   - 0001 — device keypair ใน hardware keystore เป็นตัวผูกอุปกรณ์
   - 0002 — Docker ครอบเฉพาะ backend, Flutter build นอก Docker (ส่วน CI ถูกแทนที่โดย 0008)
   - 0003 — ไม่ทำ Play Integrity (ตัดถาวร) ใช้ Android Key Attestation แทน
@@ -95,11 +95,10 @@
   · `DocumentStore::destroy()` ที่เขียนไว้ตั้งแต่ต้นแต่ไม่เคยมีใครเรียก ถูกต่อสายเข้ากับงานนี้
 - `LICENSE` — MIT เพื่อให้ใช้ repo นี้เป็นสื่อการสอนและคัดลอก pattern ไปใช้ได้
 - **`make analyse` ใช้งานได้จริงแล้ว** — เพิ่ม `larastan/larastan` (ลาก `phpstan/phpstan` มาด้วย)
-  พร้อม `apps/api/phpstan.neon` ที่ level 5 · ของเดิม 41 รายการบันทึกไว้ใน
-  `phpstan-baseline.neon` เพื่อให้โค้ดใหม่ถูกตรวจเต็มระดับโดยไม่ต้องรื้อทั้งโค้ดเบสก่อน
+  พร้อม `apps/api/phpstan.neon` ที่ level 5 ผ่านสะอาด ไม่มีไฟล์ baseline
+  ข้อยกเว้นเหลือ 6 ข้อที่เขียนเหตุผลกำกับไว้ทีละข้อใน config
   · ก่อนหน้านี้ §3 บังคับให้รันคำสั่งนี้ก่อนเปิด PR ทั้งที่ยังไม่เคยติดตั้ง phpstan เลย
-- **เคลียร์ phpstan baseline ทั้ง 41 รายการ** — เหลือข้อยกเว้น 6 ข้อที่เขียนเหตุผลกำกับ
-  และลบ `phpstan-baseline.neon` ทิ้ง · ระหว่างทางแก้ของจริง 3 จุด: `ElevatedAction::isPermitted()`
+- **ไล่เก็บผลตรวจของเดิมครบทั้ง 41 รายการ** — แก้ของจริง 3 จุด: `ElevatedAction::isPermitted()`
   ไม่มี `default` ใน match ทำให้ scope ที่ไม่รู้จักโยน `UnhandledMatchError` ออกไปเป็น 500
   แทนที่จะปฏิเสธ · `Elevation::grant()` ไม่ได้ประกาศว่า impure ทำให้การตรวจสิทธิ์ซ้ำหลังใส่ PIN
   ถูกมองว่าเป็นโค้ดตาย · `KeyDescription` กับ `Masker` มีเงื่อนไขที่เป็นจริงไม่ได้
