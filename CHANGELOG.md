@@ -60,6 +60,10 @@
   ได้โดยยังเก็บแค่ hash ไว้เหมือนเดิม (§6.2)
 
 ### Security
+- **`activity_log_days` และ `pii_access_log_days` จงใจไม่บังคับใช้** — `audit_logs` เป็น
+  append-only มี database trigger ปฏิเสธ DELETE และ model โยน exception ก่อนถึง trigger
+  การลบต้องผ่าน job แยกที่มีขั้นอนุมัติตาม architecture.md §5 ซึ่งยังไม่มี
+  `retention:apply` พิมพ์บอกเหตุผลทุกครั้งที่รัน แทนที่จะปล่อยให้เป็นช่องตั้งค่าที่ดูเหมือนทำงาน
 - **บันทึกว่าการเชื่อมต่อภายในไม่มี TLS และไม่มี mTLS เลย** (`architecture.md` §12.8 + threat model S19) —
   `postgres` ใช้ scram-sha-256 แต่ไม่เข้ารหัส · **`valkey` ไม่มีรหัสผ่านเลย** ทั้งที่เก็บ nonce กัน replay
   และ rate limit · `garage` ต่อผ่าน `http://` · สิ่งที่กันอยู่คือ network segmentation อย่างเดียว
@@ -74,6 +78,12 @@
 - เอกสารเข้ารหัส AES-256-GCM แบบ envelope ก่อนขึ้น Garage (ADR 0005)
 - Masking ข้อมูลส่วนบุคคลเป็นค่าเริ่มต้น + step-up PIN 10 นาที + audit ทุกครั้ง
 - `.gitleaks.toml` พร้อม rule เฉพาะโปรเจกต์ (KEK, pepper, manifest key, เลขบัตร 13 หลัก)
+- **`retention:apply`** — คำสั่งบังคับใช้ retention ที่ผู้ดูแลตั้งไว้ (architecture.md §10.3)
+  ลงตารางเวลาให้ `scheduler` เรียกทุกวัน 03:15 · ทำ crypto-shredding เอกสารและข้อมูลคนขับ
+  ที่พ้นกำหนด (ลบ `dek_wrapped` · ล้าง `national_id_encrypted` / ชื่อ / เบอร์ / เลขใบขับขี่ ·
+  ตั้ง `anonymized_at`) โดย **ไม่ลบแถวออกจากฐานข้อมูล** และเก็บ `national_id_hmac` ไว้กันสมัครซ้ำ
+  · ลบ `integrity_reports` ที่หมดอายุจริงเพราะไม่มี `audit_logs` ชี้มาหา
+  · `DocumentStore::destroy()` ที่เขียนไว้ตั้งแต่ต้นแต่ไม่เคยมีใครเรียก ถูกต่อสายเข้ากับงานนี้
 
 ### Changed
 - **ตัดกฎที่ผูกกับ CI ออกทั้งหมด** (ADR 0008) — repo ไม่มี CI จริง กฎที่ว่า PR ต้องผ่าน CI ก่อน merge

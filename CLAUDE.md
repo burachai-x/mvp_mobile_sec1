@@ -39,15 +39,20 @@ backend รันบน Docker ทั้งหมด
 ผลคือ **Play Integrity ใช้ไม่ได้ทางเทคนิค** ชั้นป้องกันจริงที่เหลือคือ
 **device keypair** + **Android Key Attestation** (ตรวจ `verifiedBootState` ฝั่ง server)
 
-**สถานะ repo:** เอกสารครบ · Docker stack รันได้ · migration + model ครบ 9 ตาราง ·
+**สถานะ repo:** เอกสารครบ · Docker stack รันได้ · migration + model ครบ 9 ตารางโดเมน ·
 Filament 4 resource (Drivers · Devices · ActivationCodes · AuditLogs) + หน้าตั้งค่า retention ·
 API 7 endpoint ตาม `openapi.yaml` (path ที่ 8 คือ `manifest.json` เสิร์ฟนอก Laravel ตาม §7) ·
-แอป Flutter ทำงานครบตั้งแต่สแกน QR จนอัปเดตตัวเอง · เทสต์ 21 ไฟล์
+แอป Flutter ทำงานครบตั้งแต่สแกน QR จนอัปเดตตัวเอง · เทสต์ 22 ไฟล์
 
-**ขั้นถัดไป: งาน retention** — ตาราง `retention_policies` กับหน้าตั้งค่าใน Filament มีแล้ว
-แต่ **ยังไม่มีอะไรเอาค่าไปใช้** `routes/console.php` ยังเป็นของ Laravel เดิม ไม่มี `app/Jobs/`
-ไม่มี `app/Console/Commands/` ส่วน container `scheduler` รัน `schedule:work` อยู่กับตารางเปล่า
-→ ต้องเขียน job crypto-shredding ตาม §6 และลงตารางเวลาให้ `scheduler` เรียก
+**retention ต่อสายแล้ว** — `retention:apply` (`app/Console/Commands/ApplyRetention.php`)
+ลงตารางเวลาไว้ใน `routes/console.php` ทุกวัน 03:15 ทำ crypto-shredding เอกสารและข้อมูลคนขับ
+ที่พ้นกำหนด และลบ `integrity_reports` ที่หมดอายุ
+`activity_log_days` กับ `pii_access_log_days` **จงใจไม่บังคับใช้** เพราะ `audit_logs` เป็น
+append-only — การลบต้องผ่าน job แยกที่มีขั้นอนุมัติตาม `docs/architecture.md` §5 ซึ่งยังไม่มี
+คำสั่งพิมพ์บอกเหตุผลทุกครั้งที่รัน แทนที่จะปล่อยให้เป็นช่องตั้งค่าที่ดูเหมือนทำงาน
+
+**`make analyse` รันไม่ได้** — phpstan ไม่ได้อยู่ใน `composer.json` และไม่มี `phpstan.neon`
+ทั้งที่ §3 บังคับให้รันก่อนเปิด PR
 
 ---
 

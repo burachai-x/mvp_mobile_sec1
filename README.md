@@ -142,11 +142,46 @@ lockout จึงอยู่ที่ **server** (ผิด 5 ครั้ง�
 | Data model | 12 migration · 10 model — driver, device, session, activation code, document, audit log, retention |
 | API (`APP_ROLE=api`) | 7 endpoint — enroll, ตั้ง/ตรวจ PIN, ขอ setup token ใหม่, refresh, รายงานสภาพเครื่อง, health |
 | Staff Portal | Filament v5 — ทะเบียนคนขับ + เอกสาร, activation code (Issue/Show QR/revoke), อุปกรณ์ (revoke/restore/reset PIN), audit log, ตั้งค่า retention |
-| ความปลอดภัย | attestation chain verifier, envelope encryption, masking + step-up PIN, rate limit แยกราย endpoint, replay guard ด้วย nonce |
+| ความปลอดภัย | attestation chain verifier, envelope encryption, masking + step-up PIN, rate limit แยกราย endpoint, replay guard ด้วย nonce, crypto-shredding ตาม retention |
 | แอป Android | สแกน QR, สร้าง key ใน TEE, เซ็น request, หน้าล็อก PIN, ปลดล็อกด้วยลายนิ้วมือ, certificate pinning, ตรวจ root/debugging, อัปเดตตัวเองผ่าน signed manifest |
-| เทสต์ | 21 ไฟล์ฝั่ง API (รวมเทสต์ยืนยันว่า `APP_ROLE=api` ไม่มี KEK และ `/staff` ตอบ 404) · 5 ไฟล์ฝั่งแอป |
+| เทสต์ | 22 ไฟล์ฝั่ง API (รวมเทสต์ยืนยันว่า `APP_ROLE=api` ไม่มี KEK และ `/staff` ตอบ 404) · 5 ไฟล์ฝั่งแอป |
 
 ยังไม่มี: ระบบมอบหมายงานส่งของ — อยู่นอกขอบเขต MVP
+
+### เคสที่เก็บไว้ให้ดู — control ที่มีอยู่แค่ในหน้าจอ
+
+จนถึงก่อนหน้านี้ หน้าตั้งค่า retention ใน Staff Portal ทำงานได้ครบ เจ้าหน้าที่กรอกจำนวนวัน
+กดบันทึก ค่าลงตาราง `retention_policies` จริง และเขียน `audit_logs` ให้ด้วย
+แต่ **ไม่มีโค้ดส่วนไหนอ่านค่านั้นไปลบข้อมูล** — `routes/console.php` ยังเป็น `inspire`
+ของ Laravel ไม่มี `app/Jobs/` ไม่มี `app/Console/Commands/` และ container `scheduler`
+ก็รัน `schedule:work` อยู่ตลอดกับตารางงานที่ว่างเปล่า
+
+จุดที่ทำให้มันน่าสนใจกว่านั้นคือ `DocumentStore::destroy()` ซึ่งเป็นตัว crypto-shredding
+**เขียนเสร็จสมบูรณ์มาตั้งแต่ต้นและไม่มีใครเรียกใช้เลยสักที่**
+
+ผลคือระบบผ่านการตรวจด้วยสายตาได้สบาย — มีหน้าจอให้กด มีค่าในฐานข้อมูล มี audit log
+มีโค้ด crypto-shredding ให้ชี้ให้ดู — ทั้งที่ข้อมูลไม่เคยถูกลบเลยสักครั้ง
+นี่คือรูปแบบความล้มเหลวที่เจอบ่อยที่สุดในระบบจริง และเป็นเหตุผลที่ secure by design ยืนยันว่า
+**ต้องตรวจจากพฤติกรรมของระบบ ไม่ใช่จากสิ่งที่หน้าจอแสดง**
+
+ตอนนี้ต่อสายแล้วด้วย `retention:apply` (`app/Console/Commands/ApplyRetention.php`)
+สิ่งที่มันทำ และที่สำคัญกว่าคือสิ่งที่มัน**ไม่ทำ**:
+
+| policy | ทำอะไร |
+|---|---|
+| `document_after_termination_days` | ลบ `dek_wrapped` ของเอกสาร → ciphertext ใน Garage ถอดไม่ได้ตลอดกาล แล้วค่อยลบ object แบบ best-effort |
+| `driver_data_after_termination_days` | ล้าง `national_id_encrypted` · `full_name` · `phone` · `license_number` แล้วตั้ง `anonymized_at` · **เก็บ `national_id_hmac` ไว้** กันคนที่ลาออกแล้วกลับมาสมัครซ้ำโดยระบบไม่รู้ |
+| `integrity_report_days` | ลบแถวจริง — เป็น telemetry ของเครื่อง ไม่มี `audit_logs` แถวไหนชี้มาหา |
+| `activity_log_days` | **ไม่บังคับใช้** — `audit_logs` เป็น append-only มี database trigger ปฏิเสธ DELETE และ model โยน exception ก่อนไปถึง trigger |
+| `pii_access_log_days` | **ไม่บังคับใช้** — ประวัติการเข้าถึงข้อมูลส่วนบุคคลต้องอยู่นานกว่าตัวข้อมูลเสมอ |
+
+สองอันท้ายคำสั่งจะพิมพ์บอกทุกครั้งที่รันว่าไม่ได้บังคับใช้พร้อมเหตุผล ดีกว่าปล่อยให้เป็นช่อง
+ตั้งค่าที่ดูเหมือนทำงาน — `docs/architecture.md` §5 กำหนดว่าการลบ `audit_logs` ต้องผ่าน job
+แยกที่มีขั้นอนุมัติ ซึ่งยังไม่มี
+
+**ไม่มีแถวไหนถูก `DELETE`** ทั้งคนขับและเอกสารยังอยู่ในฐานข้อมูล เพราะ `audit_logs` อ้าง
+`driver_id` ไว้ ถ้าลบแถวทิ้ง audit trail จะกลายเป็นตัวชี้ลอยทันที
+`tests/Feature/RetentionTest.php` ยืนยันทั้งสองด้าน: ลบของที่ถึงกำหนด และไม่แตะของที่ยังไม่ถึง
 
 ---
 
@@ -292,7 +327,7 @@ Laravel 13 · PHP 8.4 · PostgreSQL 18 · Valkey 8 · Garage (object storage) ·
 | `api` | `/api/v1` ให้แอปคนขับ | **❌** | **❌** |
 | `portal` | `/staff` ให้เจ้าหน้าที่ | ✅ | ✅ |
 | `worker` | queue — งานเอกสาร/เข้ารหัส | ✅ | ✅ |
-| `scheduler` | retention, manifest, แจ้งเตือน | ❌ | ✅ |
+| `scheduler` | retention — `retention:apply` ทุกวัน 03:15 | ❌ | ✅ |
 | `postgres` | ฐานข้อมูล | — | — |
 | `valkey` | nonce, rate limit, cache, queue | — | — |
 | `garage` | object storage (เอกสารเข้ารหัสแล้ว) | — | — |
