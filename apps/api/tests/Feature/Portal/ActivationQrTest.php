@@ -12,8 +12,8 @@ use App\Models\Driver;
 use App\Models\Staff;
 use App\Support\ActivationToken;
 use App\Support\Crypto\Hasher;
-use Illuminate\Foundation\Testing\RefreshDatabase;
 use Filament\Actions\Testing\TestAction;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Livewire\Livewire;
@@ -58,7 +58,7 @@ final class ActivationQrTest extends TestCase
 
     private function createCode(): ActivationCode
     {
-        $page = new ListActivationCodes();
+        $page = new ListActivationCodes;
 
         $method = new ReflectionMethod($page, 'issue');
         $method->setAccessible(true);

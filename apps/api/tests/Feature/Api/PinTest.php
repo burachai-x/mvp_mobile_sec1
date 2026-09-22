@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Tests\Feature\Api;
 
 use App\Models\Device;
+use App\Models\DeviceSession;
+use App\Support\DeviceTokens;
 use Illuminate\Testing\TestResponse;
 
 /**
@@ -256,14 +258,14 @@ final class PinTest extends ApiTestCase
     public function test_verifying_a_pin_retires_earlier_sessions(): void
     {
         $deviceId = $this->activeDevice(self::GOOD_PIN);
-        $device = \App\Models\Device::findOrFail($deviceId);
+        $device = Device::findOrFail($deviceId);
 
-        $first = \App\Support\DeviceTokens::make()->issue($device)['refresh_token'];
+        $first = DeviceTokens::make()->issue($device)['refresh_token'];
 
         $this->signedPost('/api/v1/auth/pin/verify', ['device_id' => $deviceId, 'pin' => self::GOOD_PIN])
             ->assertOk();
 
-        $this->assertSame(1, \App\Models\DeviceSession::query()
+        $this->assertSame(1, DeviceSession::query()
             ->where('device_id', $deviceId)
             ->whereNull('revoked_at')
             ->count());

@@ -7,6 +7,7 @@ namespace Tests\Feature\Api;
 use App\Models\Device;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Testing\TestResponse;
 
 /**
  * Finishing a staff PIN reset (PRD §6.7).
@@ -42,7 +43,7 @@ final class PinResetTest extends ApiTestCase
         ]);
     }
 
-    private function requestToken(): \Illuminate\Testing\TestResponse
+    private function requestToken(): TestResponse
     {
         return $this->signedPost("/api/v1/devices/{$this->deviceId}/pin/setup-token", []);
     }
