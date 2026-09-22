@@ -60,6 +60,12 @@
   ได้โดยยังเก็บแค่ hash ไว้เหมือนเดิม (§6.2)
 
 ### Security
+- **ปิดช่องโหว่ 15 รายการใน 4 package** — `composer audit` สะอาดแล้ว
+  · `filament/filament` v5.7.2 → v5.8.4 (รหัส MFA ใช้ซ้ำได้หลังออกรหัสใหม่ · เปิดเผยว่ารหัสผ่าน
+  ถูกต้องให้บัญชีที่ถูกปฏิเสธไม่ให้เข้า panel) · `livewire/livewire` v4.3.3 → v4.4.6 (DOM-based XSS)
+  — สองตัวนี้กระทบ Staff Portal โดยตรง
+  · `guzzlehttp/guzzle` 7.15.1 → 7.15.5 (host แบบ noncanonical ข้ามการตรวจ host ได้)
+  · `league/commonmark` 2.8.3 → 2.10.3 (DoS 8 รายการ + XSS 2 รายการ)
 - **`activity_log_days` และ `pii_access_log_days` จงใจไม่บังคับใช้** — `audit_logs` เป็น
   append-only มี database trigger ปฏิเสธ DELETE และ model โยน exception ก่อนถึง trigger
   การลบต้องผ่าน job แยกที่มีขั้นอนุมัติตาม architecture.md §5 ซึ่งยังไม่มี
