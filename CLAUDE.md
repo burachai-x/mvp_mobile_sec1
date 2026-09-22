@@ -39,8 +39,15 @@ backend รันบน Docker ทั้งหมด
 ผลคือ **Play Integrity ใช้ไม่ได้ทางเทคนิค** ชั้นป้องกันจริงที่เหลือคือ
 **device keypair** + **Android Key Attestation** (ตรวจ `verifiedBootState` ฝั่ง server)
 
-**สถานะ repo:** เอกสารครบ · Docker stack รันได้ · Laravel 13 ติดตั้งแล้วใน `apps/api/`
-ขั้นถัดไป: migration + model → Filament resources → API endpoints → Flutter app
+**สถานะ repo:** เอกสารครบ · Docker stack รันได้ · migration + model ครบ 9 ตาราง ·
+Filament 4 resource (Drivers · Devices · ActivationCodes · AuditLogs) + หน้าตั้งค่า retention ·
+API 7 endpoint ตาม `openapi.yaml` (path ที่ 8 คือ `manifest.json` เสิร์ฟนอก Laravel ตาม §7) ·
+แอป Flutter ทำงานครบตั้งแต่สแกน QR จนอัปเดตตัวเอง · เทสต์ 21 ไฟล์
+
+**ขั้นถัดไป: งาน retention** — ตาราง `retention_policies` กับหน้าตั้งค่าใน Filament มีแล้ว
+แต่ **ยังไม่มีอะไรเอาค่าไปใช้** `routes/console.php` ยังเป็นของ Laravel เดิม ไม่มี `app/Jobs/`
+ไม่มี `app/Console/Commands/` ส่วน container `scheduler` รัน `schedule:work` อยู่กับตารางเปล่า
+→ ต้องเขียน job crypto-shredding ตาม §6 และลงตารางเวลาให้ `scheduler` เรียก
 
 ---
 
